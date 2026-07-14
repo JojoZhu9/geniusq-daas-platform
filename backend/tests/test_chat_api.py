@@ -67,6 +67,6 @@ def test_unknown_conversation_uses_public_error_shape(client):
     )
 
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "CONVERSATION_NOT_FOUND"
-    assert response.json()["detail"]["action"] == "请新建会话后重试"
-    assert response.json()["detail"]["request_id"]
+    assert response.json()["code"] == "CONVERSATION_NOT_FOUND"
+    assert response.json()["action"] == "请新建会话后重试"
+    assert response.json()["request_id"]

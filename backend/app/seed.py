@@ -82,6 +82,42 @@ SCHEMA_STATEMENTS = (
         FOREIGN KEY (conversation_id) REFERENCES conversations(id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS knowledge_items (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        library TEXT NOT NULL,
+        content TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        linked_tables_json TEXT NOT NULL,
+        tags_json TEXT NOT NULL,
+        schema_status TEXT NOT NULL,
+        overrides_id TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE (library, fingerprint)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS data_tables (
+        name TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        schema_version INTEGER NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS sync_logs (
+        id TEXT PRIMARY KEY,
+        request_id TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        status TEXT NOT NULL,
+        message TEXT NOT NULL,
+        changed_tables_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
 )
 
 
@@ -235,5 +271,76 @@ def seed_all(engine: Engine) -> None:
                     )
                 )
                 for row in REQUIREMENT_MAPPINGS
+            ],
+        )
+        connection.execute(
+            text(
+                """
+                INSERT OR IGNORE INTO data_tables
+                    (name, status, schema_version, updated_at)
+                VALUES (:name, 'active', 1, '2026-07-14T00:00:00+08:00')
+                """
+            ),
+            [{"name": name} for name in (
+                "house_price_monthly",
+                "housing_transactions",
+                "district_population",
+                "commuting_metrics",
+            )],
+        )
+        connection.execute(
+            text(
+                """
+                INSERT OR IGNORE INTO knowledge_items
+                    (id, name, kind, scope, library, content, fingerprint,
+                     linked_tables_json, tags_json, schema_status, overrides_id, created_at)
+                VALUES
+                    (:id, :name, :kind, :scope, :library, :content, :fingerprint,
+                     :linked_tables, :tags, :schema_status, :overrides_id, :created_at)
+                """
+            ),
+            [
+                {
+                    "id": "knowledge-public-house-price",
+                    "name": "行政区房价口径（公开）",
+                    "kind": "text",
+                    "scope": "public",
+                    "library": "公共知识库",
+                    "content": "平均房价按行政区和月份统计，单位为元/平方米。",
+                    "fingerprint": "seed-house-price-definition",
+                    "linked_tables": '["house_price_monthly"]',
+                    "tags": '["房价", "指标口径"]',
+                    "schema_status": "valid",
+                    "overrides_id": None,
+                    "created_at": "2026-07-14T00:00:00+08:00",
+                },
+                {
+                    "id": "knowledge-private-house-price",
+                    "name": "行政区房价口径",
+                    "kind": "text",
+                    "scope": "private",
+                    "library": "个人知识库",
+                    "content": "平均房价按行政区和月份统计，内部分析补充剔除无效成交。",
+                    "fingerprint": "seed-house-price-definition",
+                    "linked_tables": '["house_price_monthly"]',
+                    "tags": '["房价", "指标口径", "私有优先"]',
+                    "schema_status": "valid",
+                    "overrides_id": "knowledge-public-house-price",
+                    "created_at": "2026-07-14T00:01:00+08:00",
+                },
+                {
+                    "id": "knowledge-sql-trend",
+                    "name": "月度房价趋势 SQL 模型",
+                    "kind": "sql",
+                    "scope": "private",
+                    "library": "个人知识库",
+                    "content": "SELECT month, district, avg_price FROM house_price_monthly",
+                    "fingerprint": "seed-house-price-sql",
+                    "linked_tables": '["house_price_monthly"]',
+                    "tags": '["房价", "SQL"]',
+                    "schema_status": "valid",
+                    "overrides_id": None,
+                    "created_at": "2026-07-14T00:02:00+08:00",
+                },
             ],
         )

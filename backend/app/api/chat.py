@@ -1,9 +1,8 @@
-import uuid
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db import get_session
+from app.errors import ApiError
 from app.schemas import ChatRequest
 from app.services.conversation import create_conversation, get_analysis, run_chat
 
@@ -11,16 +10,8 @@ from app.services.conversation import create_conversation, get_analysis, run_cha
 router = APIRouter()
 
 
-def _not_found(code: str, message: str, action: str) -> HTTPException:
-    return HTTPException(
-        status_code=404,
-        detail={
-            "code": code,
-            "message": message,
-            "action": action,
-            "request_id": str(uuid.uuid4()),
-        },
-    )
+def _not_found(code: str, message: str, action: str) -> ApiError:
+    return ApiError(404, code, message, action)
 
 
 @router.post("/conversations", status_code=201)
