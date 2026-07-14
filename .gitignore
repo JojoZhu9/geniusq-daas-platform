@@ -10,3 +10,4 @@ dist/
 daas_demo.db
 test-results/
 playwright-report/
+playwright-*.db

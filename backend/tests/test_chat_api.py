@@ -40,6 +40,7 @@ def test_follow_up_inherits_year_and_overrides_district(client):
         "metric": "平均房价",
     }
     assert {row["district"] for row in second["datasets"][0]["rows"]} == {"海淀区"}
+    assert "2.3" in second["requirement_ids"]
 
 
 def test_completed_analysis_can_be_reloaded(client):

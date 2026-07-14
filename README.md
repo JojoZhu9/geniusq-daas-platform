@@ -36,6 +36,12 @@ powershell -ExecutionPolicy Bypass -File .\start-demo.ps1 -NoBrowser
 powershell -ExecutionPolicy Bypass -File .\start-demo.ps1 -NoBrowser -SkipInstall
 ```
 
+默认端口被占用时可临时指定其他端口：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-demo.ps1 -BackendPort 18001 -FrontendPort 15174
+```
+
 启动地址：
 
 - 前端：[http://127.0.0.1:5173](http://127.0.0.1:5173)

@@ -1,6 +1,8 @@
 param(
     [switch]$NoBrowser,
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [int]$BackendPort = 8000,
+    [int]$FrontendPort = 5173
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,7 +12,7 @@ $Frontend = Join-Path $Root 'frontend'
 
 function Require-Command([string]$Name, [string]$InstallHint) {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-        throw "未找到 $Name。$InstallHint"
+        throw "$Name was not found. $InstallHint"
     }
 }
 
@@ -28,16 +30,16 @@ function Wait-Http([string]$Url, [int]$Attempts = 30) {
     return $false
 }
 
-Require-Command 'python' '请安装 Python 3.9+ 并勾选 Add Python to PATH。'
-Require-Command 'node' '请安装 Node.js 18+。'
-Require-Command 'npm.cmd' '请确认 Node.js 安装目录已加入 PATH。'
+Require-Command 'python' 'Install Python 3.9+ and add it to PATH.'
+Require-Command 'node' 'Install Node.js 18+.'
+Require-Command 'npm.cmd' 'Add the Node.js installation directory to PATH.'
 
 if (-not $SkipInstall) {
-    Write-Host '[1/4] 检查并安装后端依赖…' -ForegroundColor Cyan
+    Write-Host '[1/4] Checking backend dependencies...' -ForegroundColor Cyan
     & python -m pip install -e "$Backend[test]"
-    if ($LASTEXITCODE -ne 0) { throw '后端依赖安装失败。' }
+    if ($LASTEXITCODE -ne 0) { throw 'Backend dependency installation failed.' }
 
-    Write-Host '[2/4] 检查并安装前端依赖…' -ForegroundColor Cyan
+    Write-Host '[2/4] Checking frontend dependencies...' -ForegroundColor Cyan
     Push-Location $Frontend
     try {
         if (Test-Path (Join-Path $Frontend 'node_modules')) {
@@ -45,36 +47,39 @@ if (-not $SkipInstall) {
         } else {
             & npm.cmd ci --no-audit --no-fund
         }
-        if ($LASTEXITCODE -ne 0) { throw '前端依赖安装失败。' }
+        if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency installation failed.' }
     } finally {
         Pop-Location
     }
 }
 
-Write-Host '[3/4] 启动 FastAPI 与 Vite…' -ForegroundColor Cyan
+Write-Host '[3/4] Starting FastAPI and Vite...' -ForegroundColor Cyan
 $BackendProcess = Start-Process -FilePath 'python' -ArgumentList @(
     '-m', 'uvicorn', 'app.main:app', '--app-dir', $Backend,
-    '--host', '127.0.0.1', '--port', '8000'
+    '--host', '127.0.0.1', '--port', "$BackendPort"
 ) -WorkingDirectory $Root -WindowStyle Hidden -PassThru
 
+$PreviousProxy = $env:VITE_API_PROXY
+$env:VITE_API_PROXY = "http://127.0.0.1:$BackendPort"
 $FrontendProcess = Start-Process -FilePath 'npm.cmd' -ArgumentList @(
-    'run', 'dev', '--', '--port', '5173'
+    'run', 'dev', '--', '--port', "$FrontendPort"
 ) -WorkingDirectory $Frontend -WindowStyle Hidden -PassThru
+$env:VITE_API_PROXY = $PreviousProxy
 
-Write-Host '[4/4] 等待服务健康检查…' -ForegroundColor Cyan
-$BackendReady = Wait-Http 'http://127.0.0.1:8000/api/health'
-$FrontendReady = Wait-Http 'http://127.0.0.1:5173'
+Write-Host '[4/4] Waiting for service health checks...' -ForegroundColor Cyan
+$BackendReady = Wait-Http "http://127.0.0.1:$BackendPort/api/health"
+$FrontendReady = Wait-Http "http://127.0.0.1:$FrontendPort"
 
 if (-not $BackendReady -or -not $FrontendReady) {
     if (-not $BackendProcess.HasExited) { Stop-Process -Id $BackendProcess.Id -Force }
     if (-not $FrontendProcess.HasExited) { Stop-Process -Id $FrontendProcess.Id -Force }
-    throw '服务未在 30 秒内就绪。请检查 8000/5173 端口占用和运行时版本。'
+    throw "Services did not become ready in 30 seconds. Check ports $BackendPort/$FrontendPort and runtime versions."
 }
 
-Write-Host "Demo 已启动： http://127.0.0.1:5173" -ForegroundColor Green
-Write-Host "后端健康检查： http://127.0.0.1:8000/api/health" -ForegroundColor Green
-Write-Host "进程 ID：backend=$($BackendProcess.Id), frontend=$($FrontendProcess.Id)"
+Write-Host "Demo ready: http://127.0.0.1:$FrontendPort" -ForegroundColor Green
+Write-Host "Backend health: http://127.0.0.1:$BackendPort/api/health" -ForegroundColor Green
+Write-Host "Process IDs: backend=$($BackendProcess.Id), frontend=$($FrontendProcess.Id)"
 
 if (-not $NoBrowser) {
-    Start-Process 'http://127.0.0.1:5173'
+    Start-Process "http://127.0.0.1:$FrontendPort"
 }

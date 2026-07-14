@@ -52,3 +52,11 @@ def test_environment_example_keeps_offline_as_the_default():
     assert "LLM_MODE=offline" in environment
     assert "QUERY_ROW_LIMIT=500" in environment
     assert "LLM_API_KEY=" in environment
+
+
+def test_launcher_is_safe_for_windows_powershell_51_encoding():
+    launcher = (ROOT / "start-demo.ps1").read_text(encoding="utf-8")
+    assert launcher.isascii(), (
+        "Windows PowerShell 5.1 reads UTF-8 scripts without a BOM as the local "
+        "ANSI code page; keep the launcher ASCII-only so powershell -File parses it."
+    )

@@ -128,6 +128,7 @@ def run_chat(
     if previous is None:
         return None
 
+    inherited_context = any(value is not None for value in previous.model_dump().values())
     context = merge_context(previous, question)
     plan = (engine or OfflineAnalysisEngine()).analyze(question, context)
     datasets: list[dict[str, Any]] = []
@@ -154,7 +155,10 @@ def run_chat(
         "chart": plan.chart.model_dump() if plan.chart else None,
         "insights": _result_insights(plan, datasets),
         "follow_ups": plan.follow_ups,
-        "requirement_ids": plan.requirement_ids,
+        "requirement_ids": list(dict.fromkeys([
+            *plan.requirement_ids,
+            *(["2.3"] if inherited_context else []),
+        ])),
         "metadata": plan.metadata,
         "created_at": timestamp,
     }
