@@ -1,2 +1,12 @@
 .superpowers/
 .worktrees/
+__pycache__/
+.pytest_cache/
+.coverage
+*.pyc
+*.egg-info/
+node_modules/
+dist/
+daas_demo.db
+test-results/
+playwright-report/
