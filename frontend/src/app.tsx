@@ -1,6 +1,9 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { PlatformShell } from "./layout/PlatformShell";
 import { QueryWorkspace } from "./pages/QueryWorkspace";
+import { KnowledgeWorkspace } from "./pages/KnowledgeWorkspace";
+import { DashboardWorkspace } from "./pages/DashboardWorkspace";
+import { RequirementMatrix } from "./pages/RequirementMatrix";
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -17,9 +20,9 @@ export function App() {
       <Route element={<PlatformShell />}>
         <Route index element={<Navigate to="/query" replace />} />
         <Route path="query" element={<QueryWorkspace />} />
-        <Route path="knowledge" element={<Placeholder title="知识库管理" />} />
-        <Route path="dashboards" element={<Placeholder title="我的仪表盘" />} />
-        <Route path="requirements" element={<Placeholder title="需求映射" />} />
+        <Route path="knowledge" element={<KnowledgeWorkspace />} />
+        <Route path="dashboards" element={<DashboardWorkspace />} />
+        <Route path="requirements" element={<RequirementMatrix />} />
       </Route>
       <Route path="*" element={<Navigate to="/query" replace />} />
     </Routes>
