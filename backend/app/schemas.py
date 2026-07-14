@@ -44,3 +44,8 @@ class AnalysisPlan(BaseModel):
 class AnalysisEngine(Protocol):
     def analyze(self, question: str, context: QueryContext) -> AnalysisPlan:
         ...
+
+
+class ChatRequest(BaseModel):
+    conversation_id: str
+    question: str = Field(min_length=1, max_length=500)

@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from .api.chat import router as chat_router
 from .config import get_settings
 from .db import init_database
 
@@ -13,6 +14,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="极智 DAAS 智能问数优化 Demo", lifespan=lifespan)
+app.include_router(chat_router, prefix="/api", tags=["chat"])
 
 
 @app.get("/api/health")
