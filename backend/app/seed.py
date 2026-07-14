@@ -118,6 +118,31 @@ SCHEMA_STATEMENTS = (
         created_at TEXT NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS dashboards (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        share_id TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS dashboard_cards (
+        id TEXT PRIMARY KEY,
+        dashboard_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        analysis_id TEXT NOT NULL,
+        chart_json TEXT NOT NULL,
+        x INTEGER NOT NULL,
+        y INTEGER NOT NULL,
+        w INTEGER NOT NULL,
+        h INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (dashboard_id) REFERENCES dashboards(id)
+    )
+    """,
 )
 
 
