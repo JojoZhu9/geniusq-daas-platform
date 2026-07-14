@@ -46,7 +46,7 @@ class OfflineAnalysisEngine:
         return AnalysisPlan(
             needs_clarification=True,
             suggestions=[
-                "分析2025年各区房价趋势",
+                "分析2025年各区平均房价",
                 "对比2024年与2025年各区房价涨幅",
                 "分析2025年房价与成交量的关系",
             ],
@@ -81,14 +81,19 @@ class OfflineAnalysisEngine:
                     detail=f"分析 {year} 年房价月度变化。",
                 ),
                 AnalysisStep(
-                    key="query_prices",
-                    title="读取房产月度数据",
-                    detail="按月份和区域读取均价、环比与同比指标。",
+                    key="select_tables",
+                    title="选择数据表与字段",
+                    detail="house_price_monthly：district、month、avg_price、mom_change、yoy_change。",
                 ),
                 AnalysisStep(
-                    key="summarize_trend",
-                    title="汇总趋势指标",
-                    detail="用统一口径比较各区的月度走势。",
+                    key="invoke_skill",
+                    title="调用趋势与异常检测 Skill",
+                    detail="按统一口径计算最大值、月度趋势和异常波动。",
+                ),
+                AnalysisStep(
+                    key="execute_sql",
+                    title="规划并校验只读 SQL",
+                    detail="通过授权表、单语句和 500 行上限校验后执行查询。",
                 ),
             ],
             queries=[PlannedQuery(source="房产数据", sql=sql)],
@@ -106,7 +111,9 @@ class OfflineAnalysisEngine:
                 "哪些区的同比涨幅最高？",
                 "是否继续分析房价与成交量的关系？",
             ],
-            requirement_ids=["2.1-a", "2.4-a", "2.4-b", "2.5"],
+            requirement_ids=[
+                "2.1-a", "2.1-b", "2.1-c", "2.4-a", "2.4-b", "2.5"
+            ],
             metadata={"mode": "offline", "intent": "house_price_trend"},
         )
 
@@ -135,8 +142,11 @@ class OfflineAnalysisEngine:
                 ),
                 AnalysisStep(
                     key="query_sources",
-                    title="读取授权数据表",
-                    detail=f"按区域读取 {year} 年房价涨幅、人口及通勤指标。",
+                    title="选择数据表与字段",
+                    detail=(
+                        f"从 house_price_monthly、district_population 和 "
+                        f"commuting_metrics 读取 {year} 年授权字段。"
+                    ),
                 ),
                 AnalysisStep(
                     key="align_districts",
@@ -144,9 +154,9 @@ class OfflineAnalysisEngine:
                     detail="以区域为共同维度合并各数据源的年度指标。",
                 ),
                 AnalysisStep(
-                    key="compare_metrics",
-                    title="比较指标关系",
-                    detail="生成同口径对比图表，供相关性解读。",
+                    key="invoke_skill",
+                    title="调用多源关联分析 Skill",
+                    detail="生成同口径对比与相关性提示，不将相关性解释为因果。",
                 ),
             ],
             queries=[
@@ -171,6 +181,8 @@ class OfflineAnalysisEngine:
                 "哪些区的人口增长与房价涨幅同向？",
                 "是否排除异常区域后重新比较？",
             ],
-            requirement_ids=["2.1-a", "2.4-a", "2.4-b", "2.5", "5"],
+            requirement_ids=[
+                "2.1-a", "2.1-b", "2.1-c", "2.4-a", "2.4-b", "2.5", "5"
+            ],
             metadata={"mode": "offline", "intent": "cross_source_correlation"},
         )

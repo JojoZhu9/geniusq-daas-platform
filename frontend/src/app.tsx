@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { PlatformShell } from "./layout/PlatformShell";
+import { QueryWorkspace } from "./pages/QueryWorkspace";
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -15,7 +16,7 @@ export function App() {
     <Routes>
       <Route element={<PlatformShell />}>
         <Route index element={<Navigate to="/query" replace />} />
-        <Route path="query" element={<Placeholder title="智能问数工作台" />} />
+        <Route path="query" element={<QueryWorkspace />} />
         <Route path="knowledge" element={<Placeholder title="知识库管理" />} />
         <Route path="dashboards" element={<Placeholder title="我的仪表盘" />} />
         <Route path="requirements" element={<Placeholder title="需求映射" />} />

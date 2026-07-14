@@ -22,6 +22,8 @@ def test_complete_house_price_trend_returns_auditable_plan():
     assert plan.chart.type == "line"
     assert plan.steps
     assert all(step.status == "completed" for step in plan.steps)
+    assert any("Skill" in step.title for step in plan.steps)
+    assert {"2.1-a", "2.1-b", "2.1-c"}.issubset(plan.requirement_ids)
     assert plan.insights
     assert plan.follow_ups
 
