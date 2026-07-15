@@ -13,6 +13,13 @@ test("问题到图表到仪表盘可追踪 2.1—2.6", async ({ page }) => {
 
   await expect(page.getByText("数据来源与 SQL")).toBeVisible();
   await expect(page.getByText(/最大值：/)).toBeVisible();
+  const lineView = page.getByRole("img", { name: /2025年各区房价趋势，折线图/ });
+  await expect(lineView.locator("svg")).toBeVisible();
+  const lineMarkup = await lineView.locator("svg").innerHTML();
+  await page.getByRole("button", { name: "柱状" }).click();
+  const barView = page.getByRole("img", { name: /2025年各区房价趋势，柱状图/ });
+  await expect(barView.locator("svg")).toBeVisible();
+  expect(await barView.locator("svg").innerHTML()).not.toBe(lineMarkup);
   await page.getByRole("button", { name: "查看思考过程" }).click();
   await expect(page.getByText(/趋势与异常检测 Skill/)).toBeVisible();
   await page.getByRole("button", { name: "加入仪表盘" }).click();
@@ -21,6 +28,31 @@ test("问题到图表到仪表盘可追踪 2.1—2.6", async ({ page }) => {
   await page.getByRole("link", { name: "我的仪表盘" }).click();
   await expect(page.getByRole("heading", { name: "2025年各区房价趋势" })).toBeVisible();
   await expect(page.getByRole("link", { name: "需求 2.6" })).toBeVisible();
+  const card = page.getByRole("article", { name: "2025年各区房价趋势 仪表盘卡片" });
+  const initialPosition = await card.boundingBox();
+  expect(initialPosition).not.toBeNull();
+  await card.getByRole("button", { name: "移动卡片" }).click();
+  await expect(page.getByText("布局已保存")).toBeVisible();
+  const movedPosition = await card.boundingBox();
+  expect(movedPosition).not.toBeNull();
+  expect(movedPosition!.x).toBeGreaterThan(initialPosition!.x + 100);
+
+  await page.reload();
+  const persistedCard = page.getByRole("article", { name: "2025年各区房价趋势 仪表盘卡片" });
+  const persistedPosition = await persistedCard.boundingBox();
+  expect(persistedPosition).not.toBeNull();
+  expect(Math.abs(persistedPosition!.x - movedPosition!.x)).toBeLessThan(2);
+
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: "http://127.0.0.1:15173" });
+  await page.getByRole("button", { name: "复制分享链接" }).click();
+  await expect(page.getByText("本地分享链接已复制")).toBeVisible();
+  const shareUrl = await page.evaluate(() => navigator.clipboard.readText());
+  expect(shareUrl).toContain("/share/");
+  await page.goto(shareUrl);
+  await expect(page.getByRole("heading", { name: "房价分析看板" })).toBeVisible();
+  await expect(page.getByText("只读分享", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "2025年各区房价趋势" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "移动卡片" })).toHaveCount(0);
 });
 
 test("多轮追问继承年份并覆盖区域 2.3", async ({ page }) => {

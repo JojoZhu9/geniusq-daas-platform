@@ -1,6 +1,6 @@
 import { screen } from "@testing-library/react";
 import { beforeEach, vi } from "vitest";
-import { App } from "../App";
+import { App } from "../app";
 import { json, renderWorkspace } from "./workspace-test-utils";
 
 const sharedDashboard = {
