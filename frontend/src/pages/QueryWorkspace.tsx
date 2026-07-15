@@ -5,7 +5,7 @@ import { AnalysisChart } from "../components/AnalysisChart";
 import { DataSourcePanel } from "../components/DataSourcePanel";
 import { RequirementBadge } from "../components/RequirementBadge";
 import { ThinkingTimeline } from "../components/ThinkingTimeline";
-import type { AnalysisResponse, Dashboard } from "../types";
+import type { AnalysisResponse, ChartSpec, Dashboard } from "../types";
 
 type Exchange = { question: string; response: AnalysisResponse };
 
@@ -16,6 +16,7 @@ export function QueryWorkspace() {
   const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState("");
   const [initError, setInitError] = useState("");
+  const [chartTypes, setChartTypes] = useState<Record<string, ChartSpec["type"]>>({});
   const latest = history.at(-1)?.response;
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function QueryWorkspace() {
     const next = await api.post<{ id: string }>("/api/conversations");
     setConversationId(next.id);
     setHistory([]);
+    setChartTypes({});
     setNotice("已新建会话");
   }
 
@@ -62,7 +64,10 @@ export function QueryWorkspace() {
     await api.post(`/api/dashboards/${dashboard.id}/cards`, {
       title: latest.chart.title,
       analysis_id: latest.analysis_id,
-      chart: latest.chart,
+      chart: {
+        ...latest.chart,
+        type: chartTypes[latest.analysis_id] ?? latest.chart.type
+      },
       layout: { x: 0, y: dashboard.cards.length * 4, w: 6, h: 4 }
     });
     setNotice(`已加入“${dashboard.name}”`);
@@ -121,7 +126,19 @@ export function QueryWorkspace() {
                           <article key={insight}><span>{index === 0 ? "MAX" : index === 1 ? "TREND" : "NOTE"}</span><p>{insight}</p></article>
                         ))}
                       </div>
-                      {exchange.response.chart && <AnalysisChart chart={exchange.response.chart} datasets={exchange.response.datasets} />}
+                      {exchange.response.chart && (
+                        <AnalysisChart
+                          chart={{
+                            ...exchange.response.chart,
+                            type: chartTypes[exchange.response.analysis_id] ?? exchange.response.chart.type
+                          }}
+                          datasets={exchange.response.datasets}
+                          onTypeChange={(type) => setChartTypes((items) => ({
+                            ...items,
+                            [exchange.response.analysis_id]: type
+                          }))}
+                        />
+                      )}
                       <div className="result-actions">
                         <button type="button" className="primary-button" onClick={saveToDashboard}><span aria-hidden="true">＋ </span>加入仪表盘</button>
                         <span className="result-meta">耗时 &lt; 1 秒 · {exchange.response.datasets.reduce((sum, dataset) => sum + dataset.rows.length, 0)} 条记录</span>

@@ -65,6 +65,7 @@ export type DashboardCard = {
   title: string;
   analysis_id: string;
   chart: ChartSpec;
+  datasets: Dataset[];
   layout: { x: number; y: number; w: number; h: number };
 };
 export type Dashboard = {

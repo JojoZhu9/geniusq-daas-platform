@@ -86,7 +86,7 @@ test("submits an incomplete question and offers clickable suggestions", async ()
 });
 
 test("expands auditable steps and saves the chart to a dashboard", async () => {
-  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/api/conversations") return json({ id: "c1" }, 201);
     if (path === "/api/chat") return json(completedAnalysis);
@@ -94,7 +94,8 @@ test("expands auditable steps and saves the chart to a dashboard", async () => {
     if (path === "/api/dashboards" && init?.method === "POST") return json({ id: "d1", name: "房价分析看板", cards: [] }, 201);
     if (path === "/api/dashboards/d1/cards") return json({ id: "card-1" }, 201);
     throw new Error(`Unexpected request: ${path}`);
-  }));
+  });
+  vi.stubGlobal("fetch", fetchMock);
 
   renderWorkspace();
   const input = await screen.findByPlaceholderText("请输入想分析的问题");
@@ -104,6 +105,7 @@ test("expands auditable steps and saves the chart to a dashboard", async () => {
   await userEvent.click(await screen.findByRole("button", { name: "查看思考过程" }));
   expect(screen.getByText("选择数据表与字段")).toBeVisible();
   expect(screen.getAllByText("house_price_monthly").length).toBeGreaterThan(0);
+  await userEvent.click(screen.getByRole("button", { name: "折线" }));
   await userEvent.click(screen.getByRole("button", { name: "加入仪表盘" }));
 
   expect(await screen.findByText("已加入“房价分析看板”")).toBeVisible();
@@ -111,4 +113,7 @@ test("expands auditable steps and saves the chart to a dashboard", async () => {
     "/api/dashboards/d1/cards",
     expect.objectContaining({ method: "POST" })
   ));
+  const cardRequest = fetchMock.mock.calls.find(([input]) => String(input) === "/api/dashboards/d1/cards");
+  const payload = JSON.parse(String(cardRequest?.[1]?.body));
+  expect(payload.chart.type).toBe("line");
 });

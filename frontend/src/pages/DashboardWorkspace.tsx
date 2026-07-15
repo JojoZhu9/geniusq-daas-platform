@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { AnalysisChart } from "../components/AnalysisChart";
 import { RequirementBadge } from "../components/RequirementBadge";
 import type { Dashboard, DashboardCard } from "../types";
 
@@ -86,8 +87,9 @@ export function DashboardWorkspace() {
                   gridRowEnd: `span ${card.layout.h}`
                 }}
               >
-                <div className="card-head"><div><small>{card.chart.type.toUpperCase()} · 智能问数</small><h2>{card.title}</h2></div><span className="drag-handle" aria-label="可移动卡片">⠿</span></div>
-                <div className="card-chart-placeholder"><i /><i /><i /><i /><i /><i /></div>
+                <div className="dashboard-chart-shell">
+                  <AnalysisChart chart={{ ...card.chart, title: card.title }} datasets={card.datasets} />
+                </div>
                 <div className="card-footer"><span>{card.layout.w} × {card.layout.h}</span><div><button type="button" onClick={() => move(card)}>移动卡片</button><button type="button" onClick={() => resize(card)}>{card.layout.w >= 9 ? "恢复尺寸" : "放大卡片"}</button><button type="button" onClick={() => remove(card)}>移除</button></div></div>
               </article>
             ))}

@@ -149,7 +149,15 @@ function EChartView({
   );
 }
 
-export function AnalysisChart({ chart, datasets }: { chart: ChartSpec; datasets: Dataset[] }) {
+export function AnalysisChart({
+  chart,
+  datasets,
+  onTypeChange
+}: {
+  chart: ChartSpec;
+  datasets: Dataset[];
+  onTypeChange?: (type: ChartType) => void;
+}) {
   const [type, setType] = useState<ChartType>(chart.type === "table" ? "table" : chart.type);
   const [isSwitching, setIsSwitching] = useState(false);
   const tableRows = datasets[0]?.rows ?? [];
@@ -174,6 +182,7 @@ export function AnalysisChart({ chart, datasets }: { chart: ChartSpec; datasets:
     if (nextType === type) return;
     setIsSwitching(true);
     setType(nextType);
+    onTypeChange?.(nextType);
   };
 
   return (

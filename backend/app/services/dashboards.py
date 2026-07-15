@@ -15,7 +15,11 @@ def _now() -> str:
 
 def _serialize_card(row: Any) -> dict[str, Any]:
     item = dict(row)
+    analysis_response = item.pop("analysis_response_json", None)
     item["chart"] = json.loads(item.pop("chart_json"))
+    item["datasets"] = (
+        json.loads(analysis_response).get("datasets", []) if analysis_response else []
+    )
     item["layout"] = {
         "x": item.pop("x"),
         "y": item.pop("y"),
@@ -35,8 +39,12 @@ def get_dashboard(session: Session, dashboard_id: str) -> dict[str, Any] | None:
     dashboard = dict(row)
     cards = session.execute(
         text(
-            "SELECT * FROM dashboard_cards WHERE dashboard_id = :dashboard_id "
-            "ORDER BY y, x, created_at"
+            "SELECT dashboard_cards.*, "
+            "analysis_runs.response_json AS analysis_response_json "
+            "FROM dashboard_cards "
+            "LEFT JOIN analysis_runs ON analysis_runs.id = dashboard_cards.analysis_id "
+            "WHERE dashboard_cards.dashboard_id = :dashboard_id "
+            "ORDER BY dashboard_cards.y, dashboard_cards.x, dashboard_cards.created_at"
         ),
         {"dashboard_id": dashboard_id},
     ).mappings().all()
@@ -121,7 +129,14 @@ def add_card(
     )
     session.commit()
     row = session.execute(
-        text("SELECT * FROM dashboard_cards WHERE id = :id"), {"id": card_id}
+        text(
+            "SELECT dashboard_cards.*, "
+            "analysis_runs.response_json AS analysis_response_json "
+            "FROM dashboard_cards "
+            "LEFT JOIN analysis_runs ON analysis_runs.id = dashboard_cards.analysis_id "
+            "WHERE dashboard_cards.id = :id"
+        ),
+        {"id": card_id},
     ).mappings().one()
     return _serialize_card(row)
 
