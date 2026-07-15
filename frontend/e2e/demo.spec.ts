@@ -36,9 +36,13 @@ test("问题到图表到仪表盘可追踪 2.1—2.6", async ({ page }) => {
   await expect(page.getByText(/趋势与异常检测 Skill/)).toBeVisible();
   await page.getByRole("button", { name: "加入仪表盘" }).click();
   await expect(page.getByText("已加入“房价分析看板”")).toBeVisible();
+  await ask(page, "分析2024年各区平均房价");
+  await page.getByRole("button", { name: "加入仪表盘" }).click();
+  await expect(page.getByText("已加入“房价分析看板”")).toBeVisible();
 
   await page.getByRole("link", { name: "我的仪表盘" }).click();
   await expect(page.getByRole("heading", { name: "2025年各区房价趋势" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "2024年各区房价趋势" })).toBeVisible();
   await expect(page.getByRole("link", { name: "需求 2.6" })).toBeVisible();
   const card = page.getByRole("article", { name: "2025年各区房价趋势 仪表盘卡片" });
   await expect(card.getByRole("img", { name: /2025年各区房价趋势，柱状图/ }).locator("svg")).toBeVisible();
@@ -47,7 +51,8 @@ test("问题到图表到仪表盘可追踪 2.1—2.6", async ({ page }) => {
   await expect(card.getByRole("table").locator("tbody tr")).toHaveCount(12);
   const initialPosition = await card.boundingBox();
   expect(initialPosition).not.toBeNull();
-  await card.getByRole("button", { name: "移动卡片" }).click();
+  const targetCard = page.getByRole("article", { name: "2024年各区房价趋势 仪表盘卡片" });
+  await card.getByRole("button", { name: /拖动卡片/ }).dragTo(targetCard);
   await expect(page.getByText("布局已保存")).toBeVisible();
   const movedPosition = await card.boundingBox();
   expect(movedPosition).not.toBeNull();

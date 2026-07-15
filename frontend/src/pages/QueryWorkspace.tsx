@@ -9,6 +9,25 @@ import type { AnalysisResponse, ChartSpec, Dashboard } from "../types";
 
 type Exchange = { question: string; response: AnalysisResponse };
 
+function nextDashboardCardLayout(cards: Dashboard["cards"]) {
+  const width = 6;
+  const height = 4;
+  const overlaps = (x: number, y: number) => cards.some((card) => (
+    x < card.layout.x + card.layout.w
+    && x + width > card.layout.x
+    && y < card.layout.y + card.layout.h
+    && y + height > card.layout.y
+  ));
+
+  for (let row = 0; row <= cards.length; row += 1) {
+    const y = row * height;
+    for (const x of [0, 6]) {
+      if (!overlaps(x, y)) return { x, y, w: width, h: height };
+    }
+  }
+  return { x: 0, y: cards.length * height, w: width, h: height };
+}
+
 export function QueryWorkspace() {
   const [conversationId, setConversationId] = useState("");
   const [question, setQuestion] = useState("");
@@ -68,7 +87,7 @@ export function QueryWorkspace() {
         ...latest.chart,
         type: chartTypes[latest.analysis_id] ?? latest.chart.type
       },
-      layout: { x: 0, y: dashboard.cards.length * 4, w: 6, h: 4 }
+      layout: nextDashboardCardLayout(dashboard.cards)
     });
     setNotice(`已加入“${dashboard.name}”`);
   }

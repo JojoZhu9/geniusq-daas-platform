@@ -86,11 +86,16 @@ test("submits an incomplete question and offers clickable suggestions", async ()
 });
 
 test("expands auditable steps and saves the chart to a dashboard", async () => {
+  const existingDashboard = {
+    id: "d1",
+    name: "房价分析看板",
+    cards: [{ id: "existing-card", layout: { x: 0, y: 0, w: 6, h: 4 } }]
+  };
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/api/conversations") return json({ id: "c1" }, 201);
     if (path === "/api/chat") return json(completedAnalysis);
-    if (path === "/api/dashboards" && (!init?.method || init.method === "GET")) return json([]);
+    if (path === "/api/dashboards" && (!init?.method || init.method === "GET")) return json([existingDashboard]);
     if (path === "/api/dashboards" && init?.method === "POST") return json({ id: "d1", name: "房价分析看板", cards: [] }, 201);
     if (path === "/api/dashboards/d1/cards") return json({ id: "card-1" }, 201);
     throw new Error(`Unexpected request: ${path}`);
@@ -116,4 +121,5 @@ test("expands auditable steps and saves the chart to a dashboard", async () => {
   const cardRequest = fetchMock.mock.calls.find(([input]) => String(input) === "/api/dashboards/d1/cards");
   const payload = JSON.parse(String(cardRequest?.[1]?.body));
   expect(payload.chart.type).toBe("line");
+  expect(payload.layout).toEqual({ x: 6, y: 0, w: 6, h: 4 });
 });
