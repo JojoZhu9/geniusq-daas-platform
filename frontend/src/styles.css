@@ -118,13 +118,7 @@ button { border: 0; }
 .segmented { display: flex; padding: 2px; border-radius: 4px; background: #edf1f5; }
 .segmented button { padding: 5px 8px; border-radius: 3px; color: #6e7e90; background: transparent; font-size: 10px; }
 .segmented button.active { color: var(--blue); background: #fff; box-shadow: 0 1px 4px rgba(30,50,70,.1); }
-.mini-chart { display: grid; gap: 7px; padding: 14px; }
-.chart-row { display: grid; grid-template-columns: 78px 1fr 68px; align-items: center; gap: 8px; font-size: 10px; }
-.chart-row > span { overflow: hidden; color: #596d82; text-overflow: ellipsis; white-space: nowrap; }
-.chart-row strong { color: #3a526b; text-align: right; font-size: 10px; }
-.bar-track { height: 7px; overflow: hidden; border-radius: 999px; background: #edf2f7; }
-.bar-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2c8fe5, #5bb5f3); }
-.mini-chart.line .bar-track i { height: 3px; margin-top: 2px; background: #725fed; }
+.echart-view { width: 100%; height: 280px; background: linear-gradient(180deg, #fff, #fbfdff); }
 .chart-footnote { margin: 0; padding: 8px 12px; border-top: 1px solid #edf0f4; color: #8a98a8; font-size: 9px; }
 .table-scroll { overflow: auto; max-height: 280px; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 10px; }
