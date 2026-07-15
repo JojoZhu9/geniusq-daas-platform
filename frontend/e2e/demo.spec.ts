@@ -8,6 +8,8 @@ async function ask(page: import("@playwright/test").Page, question: string) {
 }
 
 test("问题到图表到仪表盘可追踪 2.1—2.6", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/query");
   await ask(page, "分析2025年各区平均房价");
 
@@ -20,6 +22,14 @@ test("问题到图表到仪表盘可追踪 2.1—2.6", async ({ page }) => {
   const barView = page.getByRole("img", { name: /2025年各区房价趋势，柱状图/ });
   await expect(barView.locator("svg")).toBeVisible();
   expect(await barView.locator("svg").innerHTML()).not.toBe(lineMarkup);
+  await page.getByRole("button", { name: "表格" }).click();
+  const tableView = page.getByRole("table");
+  await expect(tableView).toBeVisible();
+  await expect(tableView.getByRole("columnheader", { name: "avg_price" })).toBeVisible();
+  await expect(tableView.locator("tbody tr")).toHaveCount(12);
+  await page.getByRole("button", { name: "折线" }).click();
+  await expect(page.getByRole("img", { name: /2025年各区房价趋势，折线图/ }).locator("svg")).toBeVisible();
+  expect(pageErrors).toEqual([]);
   await page.getByRole("button", { name: "查看思考过程" }).click();
   await expect(page.getByText(/趋势与异常检测 Skill/)).toBeVisible();
   await page.getByRole("button", { name: "加入仪表盘" }).click();

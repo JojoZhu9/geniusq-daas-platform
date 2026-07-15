@@ -40,3 +40,16 @@ test("renders genuinely different SVG line and bar charts", async () => {
   expect(barView.innerHTML).not.toBe(lineMarkup);
   expect(document.querySelector(".bar-track")).not.toBeInTheDocument();
 });
+
+test("keeps table rows visible after switching away from ECharts", async () => {
+  render(<AnalysisChart chart={chart} datasets={datasets} />);
+
+  await userEvent.click(screen.getByRole("button", { name: "柱状" }));
+  await waitFor(() => expect(screen.getByRole("img").querySelector("svg")).not.toBeNull());
+
+  await userEvent.click(screen.getByRole("button", { name: "表格" }));
+
+  const table = await screen.findByRole("table");
+  expect(table).toHaveTextContent("avg_price");
+  expect(table).toHaveTextContent("100000");
+});
