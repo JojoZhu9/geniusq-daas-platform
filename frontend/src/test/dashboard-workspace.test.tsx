@@ -68,15 +68,20 @@ test("persists a resized dashboard card", async () => {
   expect(screen.getByRole("button", { name: "拖动卡片：2025年各区平均房价" })).toHaveTextContent("9 × 5");
 });
 
-test("moves a card to a visible grid column and keeps it after refresh", async () => {
+test("previews and saves a blank grid drop target while dragging", async () => {
   let current = dashboard;
+  let savedCards: Array<{ id: string; x: number; y: number; w: number; h: number }> = [];
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/api/dashboards" && !init?.method) return json([current]);
     if (path === "/api/dashboards/d1/layout" && init?.method === "PATCH") {
+      savedCards = JSON.parse(String(init.body)).cards;
       current = {
         ...dashboard,
-        cards: [{ ...dashboard.cards[0], layout: { x: 6, y: 0, w: 6, h: 4 } }]
+        cards: dashboard.cards.map((card) => {
+          const next = savedCards.find((item) => item.id === card.id);
+          return next ? { ...card, layout: { x: next.x, y: next.y, w: next.w, h: next.h } } : card;
+        })
       };
       return json(current);
     }
@@ -86,15 +91,108 @@ test("moves a card to a visible grid column and keeps it after refresh", async (
   renderWorkspace(<DashboardWorkspace />);
   const card = (await screen.findByRole("heading", { name: "2025年各区平均房价" })).closest("article");
   expect(card).toHaveStyle({ gridColumnStart: "1" });
+  expect(screen.queryByRole("button", { name: "移动卡片" })).not.toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole("button", { name: "移动卡片" }));
+  const grid = document.querySelector(".dashboard-grid") as HTMLDivElement;
+  vi.spyOn(grid, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 1200,
+    bottom: 600,
+    width: 1200,
+    height: 600,
+    toJSON: () => ({})
+  });
+  fireEvent.pointerDown(screen.getByRole("button", { name: "拖动卡片：2025年各区平均房价" }), { button: 0 });
+  fireEvent(grid, new MouseEvent("pointermove", { bubbles: true, clientX: 900, clientY: 80 }));
+  expect(screen.getByRole("status", { name: "卡片空白落点" })).toHaveStyle({
+    gridColumnStart: "7",
+    gridRowStart: "1"
+  });
+  fireEvent(grid, new MouseEvent("pointermove", { bubbles: true, clientX: 900, clientY: 200 }));
+  expect(screen.getByRole("status", { name: "卡片空白落点" })).toHaveStyle({
+    gridColumnStart: "7",
+    gridRowStart: "1"
+  });
+  fireEvent(grid, new MouseEvent("pointerup", { bubbles: true, clientX: 900, clientY: 200 }));
 
+  await waitFor(() => expect(savedCards).toEqual([{ id: "card-1", x: 6, y: 0, w: 6, h: 4 }]));
   expect(await screen.findByText("布局已保存")).toBeVisible();
   expect(card).toHaveStyle({ gridColumnStart: "7" });
   expect(card).toHaveAttribute("data-grid-x", "6");
+});
 
-  await userEvent.click(screen.getByRole("button", { name: "刷新数据" }));
-  expect(card).toHaveStyle({ gridColumnStart: "7" });
+test("clears the blank placeholder when hovering another card", async () => {
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([twoColumnDashboard]);
+    if (path === "/api/dashboards/d1/layout" && init?.method === "PATCH") return json(twoColumnDashboard);
+    throw new Error(`Unexpected request: ${path}`);
+  }));
+
+  renderWorkspace(<DashboardWorkspace />);
+  const leftCard = (await screen.findByRole("heading", { name: "左侧图表" })).closest("article")!;
+  const rightCard = screen.getByRole("heading", { name: "右侧图表" }).closest("article")!;
+  const grid = document.querySelector(".dashboard-grid") as HTMLDivElement;
+  vi.spyOn(grid, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 1200,
+    bottom: 600,
+    width: 1200,
+    height: 600,
+    toJSON: () => ({})
+  });
+
+  fireEvent.pointerDown(within(leftCard).getByRole("button", { name: "拖动卡片：左侧图表" }), { button: 0 });
+  fireEvent(grid, new MouseEvent("pointermove", { bubbles: true, clientX: 900, clientY: 360 }));
+  expect(screen.getByRole("status", { name: "卡片空白落点" })).toBeVisible();
+  fireEvent.pointerEnter(rightCard);
+
+  expect(screen.queryByRole("status", { name: "卡片空白落点" })).not.toBeInTheDocument();
+  expect(rightCard).toHaveClass("drop-target");
+});
+
+test("does not swap cards from an occupied blank-grid release without direct card hover", async () => {
+  let savedCards: Array<{ id: string; x: number; y: number; w: number; h: number }> = [];
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([twoColumnDashboard]);
+    if (path === "/api/dashboards/d1/layout" && init?.method === "PATCH") {
+      savedCards = JSON.parse(String(init.body)).cards;
+      return json(twoColumnDashboard);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  }));
+
+  renderWorkspace(<DashboardWorkspace />);
+  const leftCard = (await screen.findByRole("heading", { name: "左侧图表" })).closest("article")!;
+  const rightCard = screen.getByRole("heading", { name: "右侧图表" }).closest("article")!;
+  const grid = document.querySelector(".dashboard-grid") as HTMLDivElement;
+  vi.spyOn(grid, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 1200,
+    bottom: 600,
+    width: 1200,
+    height: 600,
+    toJSON: () => ({})
+  });
+
+  fireEvent.pointerDown(within(leftCard).getByRole("button", { name: "拖动卡片：左侧图表" }), { button: 0 });
+  fireEvent(grid, new MouseEvent("pointermove", { bubbles: true, clientX: 900, clientY: 80 }));
+  expect(screen.queryByRole("status", { name: "卡片空白落点" })).not.toBeInTheDocument();
+  fireEvent(grid, new MouseEvent("pointerup", { bubbles: true, clientX: 900, clientY: 80 }));
+
+  expect(savedCards).toEqual([]);
+  expect(leftCard).toHaveStyle({ gridColumnStart: "1" });
+  expect(rightCard).toHaveStyle({ gridColumnStart: "7" });
 });
 
 test("renders the saved analysis chart and allows switching to its data table", async () => {

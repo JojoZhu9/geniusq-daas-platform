@@ -35,6 +35,21 @@ function layoutsOverlap(left: DashboardCard["layout"], right: DashboardCard["lay
     && left.y + left.h > right.y;
 }
 
+function dropTargetFromPointer(
+  source: DashboardCard,
+  bounds: DOMRect,
+  clientX: number,
+  clientY: number
+): DashboardCard["layout"] {
+  const relativeX = clientX - bounds.left;
+  const relativeY = Math.max(0, clientY - bounds.top);
+  const targetX = source.layout.w > 6
+    ? (relativeX < bounds.width / 2 ? 0 : 12 - source.layout.w)
+    : (relativeX < bounds.width / 2 ? 0 : 6);
+  const targetY = Math.max(0, Math.floor(relativeY / 280) * 4);
+  return { ...source.layout, x: targetX, y: targetY };
+}
+
 function firstOpenPosition(card: DashboardCard, occupied: LayoutItem[]): LayoutItem {
   const rightX = Math.max(0, 12 - card.layout.w);
   const candidateXs = card.layout.w <= 6 ? [0, 6] : [0, rightX];
@@ -61,7 +76,9 @@ export function DashboardWorkspace() {
   const [notice, setNotice] = useState("");
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [blankDropTarget, setBlankDropTarget] = useState<DashboardCard["layout"] | null>(null);
   const dragSession = useRef<string | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
 
   async function load() {
     const dashboards = await api.get<Dashboard[]>("/api/dashboards");
@@ -80,13 +97,16 @@ export function DashboardWorkspace() {
   useEffect(() => {
     if (!draggedCardId) return undefined;
     const releaseOutsideGrid = () => finishDrag();
+    const previewOutsideGrid = (event: PointerEvent) => previewBlankDropAt(event.clientX, event.clientY, event.target);
+    window.addEventListener("pointermove", previewOutsideGrid);
     window.addEventListener("pointerup", releaseOutsideGrid);
     window.addEventListener("pointercancel", releaseOutsideGrid);
     return () => {
+      window.removeEventListener("pointermove", previewOutsideGrid);
       window.removeEventListener("pointerup", releaseOutsideGrid);
       window.removeEventListener("pointercancel", releaseOutsideGrid);
     };
-  }, [draggedCardId]);
+  }, [dashboard, draggedCardId]);
 
   async function create() {
     const next = await api.post<Dashboard>("/api/dashboards", { name: "房价分析看板" });
@@ -104,20 +124,6 @@ export function DashboardWorkspace() {
       h: isLarge ? 4 : 5
     })));
     setNotice(isLarge ? "已恢复默认尺寸" : "布局已保存");
-  }
-
-  async function move(card: DashboardCard) {
-    if (!dashboard) return;
-    const rightX = Math.max(0, 12 - card.layout.w);
-    const targetX = card.layout.x === 0 ? rightX : 0;
-    const occupant = dashboard.cards.find((item) => item.id !== card.id
-      && item.layout.x === targetX
-      && item.layout.y === card.layout.y);
-    if (occupant) {
-      await swapCards(card, occupant);
-      return;
-    }
-    await saveLayout([layoutItem(card, { x: targetX })]);
   }
 
   async function saveLayout(cards: LayoutItem[]) {
@@ -145,6 +151,8 @@ export function DashboardWorkspace() {
     event.preventDefault();
     dragSession.current = card.id;
     setDraggedCardId(card.id);
+    setDropTargetId(null);
+    setBlankDropTarget(null);
     setNotice("拖到另一张卡片可交换位置，拖到空白区域可移动");
   }
 
@@ -152,11 +160,38 @@ export function DashboardWorkspace() {
     dragSession.current = null;
     setDraggedCardId(null);
     setDropTargetId(null);
+    setBlankDropTarget(null);
   }
 
   function markDropTarget(target: DashboardCard) {
     const sourceId = dragSession.current;
-    if (sourceId && sourceId !== target.id) setDropTargetId(target.id);
+    if (sourceId && sourceId !== target.id) {
+      setBlankDropTarget(null);
+      setDropTargetId(target.id);
+    }
+  }
+
+  function previewBlankDropAt(clientX: number, clientY: number, target: EventTarget | null) {
+    if (!dashboard || !dragSession.current || !gridRef.current) return;
+    const eventTarget = target instanceof Element ? target : null;
+    if (eventTarget?.closest("[data-dashboard-card-id]")) {
+      setBlankDropTarget(null);
+      return;
+    }
+    const source = dashboard.cards.find((item) => item.id === dragSession.current);
+    if (!source) return;
+    const nextTarget = dropTargetFromPointer(source, gridRef.current.getBoundingClientRect(), clientX, clientY);
+    const occupant = dashboard.cards.find((item) => item.id !== source.id && layoutsOverlap(nextTarget, item.layout));
+    if (occupant) {
+      setBlankDropTarget(null);
+      return;
+    }
+    setDropTargetId(null);
+    setBlankDropTarget(nextTarget);
+  }
+
+  function previewBlankDrop(event: ReactPointerEvent<HTMLDivElement>) {
+    previewBlankDropAt(event.clientX, event.clientY, event.target);
   }
 
   async function dropOnCard(event: ReactPointerEvent<HTMLElement>, target: DashboardCard) {
@@ -179,21 +214,10 @@ export function DashboardWorkspace() {
     finishDrag();
     if (!source) return;
 
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const relativeX = event.clientX - bounds.left;
-    const relativeY = Math.max(0, event.clientY - bounds.top);
-    const targetX = source.layout.w > 6
-      ? (relativeX < bounds.width / 2 ? 0 : 12 - source.layout.w)
-      : (relativeX < bounds.width / 2 ? 0 : 6);
-    const targetY = Math.max(0, Math.round(relativeY / 280) * 4);
-    const occupant = dashboard.cards.find((item) => item.id !== source.id
-      && item.layout.x === targetX
-      && item.layout.y === targetY);
-    if (occupant) {
-      await swapCards(source, occupant);
-      return;
-    }
-    await saveLayout([layoutItem(source, { x: targetX, y: targetY })]);
+    const target = dropTargetFromPointer(source, event.currentTarget.getBoundingClientRect(), event.clientX, event.clientY);
+    const occupant = dashboard.cards.find((item) => item.id !== source.id && layoutsOverlap(target, item.layout));
+    if (occupant) return;
+    await saveLayout([layoutItem(source, { x: target.x, y: target.y })]);
   }
 
   async function remove(card: DashboardCard) {
@@ -222,7 +246,13 @@ export function DashboardWorkspace() {
       ) : (
         <>
           <div className="dashboard-summary panel"><div><small>卡片数量</small><strong>{dashboard.cards.length}</strong></div><div><small>布局规格</small><strong>两列 · 12 列栅格</strong></div><div><small>分享标识</small><strong>{dashboard.share_id.slice(0, 8)}</strong></div><RequirementBadge id="2.6" /></div>
-          <div className="dashboard-grid" onPointerUp={(event) => { void dropOnGrid(event); }} onPointerCancel={finishDrag}>
+          <div
+            className="dashboard-grid"
+            ref={gridRef}
+            onPointerMove={previewBlankDrop}
+            onPointerUp={(event) => { void dropOnGrid(event); }}
+            onPointerCancel={finishDrag}
+          >
             {dashboard.cards.map((card) => (
               <article
                 aria-label={`${card.title} 仪表盘卡片`}
@@ -251,10 +281,23 @@ export function DashboardWorkspace() {
                     aria-label={`拖动卡片：${card.title}`}
                     onPointerDown={(event) => startDrag(event, card)}
                   >⠿ 拖动 · {card.layout.w} × {card.layout.h}</button>
-                  <div><button type="button" onClick={() => move(card)}>移动卡片</button><button type="button" onClick={() => resize(card)}>{card.layout.w >= 9 ? "恢复尺寸" : "放大卡片"}</button><button type="button" onClick={() => remove(card)}>移除</button></div>
+                  <div><button type="button" onClick={() => resize(card)}>{card.layout.w >= 9 ? "恢复尺寸" : "放大卡片"}</button><button type="button" onClick={() => remove(card)}>移除</button></div>
                 </div>
               </article>
             ))}
+            {blankDropTarget && (
+              <div
+                aria-label="卡片空白落点"
+                className="dashboard-drop-placeholder"
+                role="status"
+                style={{
+                  gridColumnStart: blankDropTarget.x + 1,
+                  gridColumnEnd: `span ${blankDropTarget.w}`,
+                  gridRowStart: blankDropTarget.y + 1,
+                  gridRowEnd: `span ${blankDropTarget.h}`
+                }}
+              />
+            )}
             {!dashboard.cards.length && <div className="panel dashboard-empty compact"><p>暂无卡片，请从智能问数页将图表加入此看板。</p></div>}
           </div>
         </>

@@ -229,6 +229,7 @@ button { border: 0; }
 .dashboard-card { overflow: hidden; height: 100%; transition: opacity .15s ease, box-shadow .15s ease, outline-color .15s ease; }
 .dashboard-card.dragging { opacity: .48; }
 .dashboard-card.drop-target { outline: 2px solid #1682df; outline-offset: 2px; box-shadow: 0 10px 28px rgba(22,130,223,.18); }
+.dashboard-drop-placeholder { z-index: 1; min-height: 100%; border: 2px dashed #1682df; border-radius: 7px; background: rgba(22,130,223,.06); box-shadow: 0 8px 22px rgba(22,130,223,.14); pointer-events: none; }
 .dashboard-chart-shell .analysis-chart, .shared-chart-shell .analysis-chart { margin: 0; border: 0; border-radius: 0; }
 .dashboard-chart-shell .echart-view, .shared-chart-shell .echart-view { height: 150px; }
 .dashboard-chart-shell .table-scroll, .shared-chart-shell .table-scroll { height: 150px; max-height: 150px; }

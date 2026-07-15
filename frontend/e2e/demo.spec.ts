@@ -41,17 +41,31 @@ test("问题到图表到仪表盘可追踪 2.1—2.6", async ({ page }) => {
   await expect(page.getByText("已加入“房价分析看板”")).toBeVisible();
 
   await page.getByRole("link", { name: "我的仪表盘" }).click();
-  await expect(page.getByRole("heading", { name: "2025年各区房价趋势" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "2024年各区房价趋势" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "2025年各区房价趋势" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "2024年各区房价趋势" }).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "需求 2.6" })).toBeVisible();
-  const card = page.getByRole("article", { name: "2025年各区房价趋势 仪表盘卡片" });
+  const card = page.getByRole("article", { name: "2025年各区房价趋势 仪表盘卡片" }).first();
   await expect(card.getByRole("img", { name: /2025年各区房价趋势，柱状图/ }).locator("svg")).toBeVisible();
   await card.getByRole("button", { name: "表格" }).click();
   await expect(card.getByRole("table")).toBeVisible();
   await expect(card.getByRole("table").locator("tbody tr")).toHaveCount(12);
+  await expect(card.getByRole("button", { name: "移动卡片" })).toHaveCount(0);
+  const dragHandle = card.getByRole("button", { name: /拖动卡片/ });
+  const handleBox = await dragHandle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+  await page.mouse.down();
+  await expect(page.getByText("拖到另一张卡片可交换位置，拖到空白区域可移动")).toBeVisible();
+  const gridBox = await page.locator(".dashboard-grid").boundingBox();
+  expect(gridBox).not.toBeNull();
+  await page.mouse.move(gridBox!.x + gridBox!.width * 0.75, gridBox!.y + 320, { steps: 5 });
+  await expect(page.getByRole("status", { name: "卡片空白落点" })).toBeVisible();
+  await page.mouse.move(gridBox!.x - 20, gridBox!.y - 20);
+  await page.mouse.up();
+  await expect(page.getByRole("status", { name: "卡片空白落点" })).toHaveCount(0);
   const initialPosition = await card.boundingBox();
   expect(initialPosition).not.toBeNull();
-  const targetCard = page.getByRole("article", { name: "2024年各区房价趋势 仪表盘卡片" });
+  const targetCard = page.getByRole("article", { name: "2024年各区房价趋势 仪表盘卡片" }).first();
   await card.getByRole("button", { name: /拖动卡片/ }).dragTo(targetCard);
   await expect(page.getByText("布局已保存")).toBeVisible();
   const movedPosition = await card.boundingBox();
@@ -59,7 +73,7 @@ test("问题到图表到仪表盘可追踪 2.1—2.6", async ({ page }) => {
   expect(movedPosition!.x).toBeGreaterThan(initialPosition!.x + 100);
 
   await page.reload();
-  const persistedCard = page.getByRole("article", { name: "2025年各区房价趋势 仪表盘卡片" });
+  const persistedCard = page.getByRole("article", { name: "2025年各区房价趋势 仪表盘卡片" }).first();
   const persistedPosition = await persistedCard.boundingBox();
   expect(persistedPosition).not.toBeNull();
   expect(Math.abs(persistedPosition!.x - movedPosition!.x)).toBeLessThan(2);
@@ -72,9 +86,9 @@ test("问题到图表到仪表盘可追踪 2.1—2.6", async ({ page }) => {
   await page.goto(shareUrl);
   await expect(page.getByRole("heading", { name: "房价分析看板" })).toBeVisible();
   await expect(page.getByText("只读分享", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "2025年各区房价趋势" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "2025年各区房价趋势" }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "移动卡片" })).toHaveCount(0);
-  const sharedCard = page.getByRole("article", { name: "2025年各区房价趋势 只读卡片" });
+  const sharedCard = page.getByRole("article", { name: "2025年各区房价趋势 只读卡片" }).first();
   await expect(sharedCard.getByRole("img", { name: /2025年各区房价趋势，柱状图/ }).locator("svg")).toBeVisible();
   await sharedCard.getByRole("button", { name: "表格" }).click();
   await expect(sharedCard.getByRole("table").locator("tbody tr")).toHaveCount(12);
