@@ -110,7 +110,7 @@ export function QueryWorkspace() {
         <main className="query-main panel">
           <div className="query-welcome">
             <div className="sparkle">✦</div>
-            <div><h2>你好，我是极智智能问数助手</h2><p>我会展示可审计的业务步骤、数据来源、只读 SQL、图表和结论。</p></div>
+            <div><h2>你好，我是 GeniusQ 智能问数助手</h2><p>我会展示可审计的业务步骤、数据来源、只读 SQL、图表和结论。</p></div>
           </div>
           <div className="quick-prompts">
             {["分析2025年各区平均房价", "只看海淀区", "2025年房价上涨是否与人口和通勤相关"].map((item) => (

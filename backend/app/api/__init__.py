@@ -1,1 +1,1 @@
-"""HTTP routers for the local DAAS demo."""
+"""HTTP routers for the local GeniusQ DaaS Platform demo."""

@@ -18,7 +18,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="极智 DAAS 智能问数优化 Demo", lifespan=lifespan)
+app = FastAPI(title="GeniusQ DaaS Platform Intelligent Query Demo", lifespan=lifespan)
 app.include_router(chat_router, prefix="/api", tags=["chat"])
 app.include_router(knowledge_router, prefix="/api", tags=["knowledge"])
 app.include_router(dashboards_router, prefix="/api", tags=["dashboards"])

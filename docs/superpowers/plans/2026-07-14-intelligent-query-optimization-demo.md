@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Windows-local, offline-first 极智 DAAS intelligent-query demo and a Chinese implementation proposal, with every feature traceable to the 石墨 0714 requirement list.
+**Goal:** Build a Windows-local, offline-first GeniusQ DaaS Platform intelligent-query demo and a Chinese implementation proposal, with every feature traceable to the 石墨 0714 requirement list.
 
 **Architecture:** A React + TypeScript single-page application calls a FastAPI service over JSON. FastAPI owns conversation orchestration, deterministic offline analysis, optional OpenAI-compatible inference, read-only SQLite execution, knowledge-base rules, dashboards, and requirement mappings; SQLite stores both demo business data and application state.
 
@@ -16,7 +16,7 @@
 - Only one read-only `SELECT` or `WITH` statement may execute per subquery; reject DDL, DML, PRAGMA, ATTACH, and multi-statement SQL.
 - Query results are capped at 500 rows and restricted to the four seeded demo tables.
 - “思考过程” means auditable business execution steps, never hidden chain-of-thought text.
-- The UI follows the supplied 极智 DAAS screenshots: dark top bar, blue active state, left navigation, central workspace, pale gray page background.
+- The UI follows the supplied GeniusQ DaaS Platform screenshots: dark top bar, blue active state, left navigation, central workspace, pale gray page background.
 - Every user-visible feature carries a requirement id from `2.1` through `5`, and `/api/requirements` is the canonical traceability source.
 - PowerShell scripts call `npm.cmd`, not `npm`, because the current machine blocks `npm.ps1`.
 - Do not edit or delete the pre-existing untracked mojibake file `docs/superpowers/specs/2026-07-14-smart-qa-optimization-demo-design.md`.
@@ -108,7 +108,7 @@
 ```toml
 # backend/pyproject.toml
 [project]
-name = "daas-intelligent-query-demo"
+name = "geniusq-daas-platform"
 version = "0.1.0"
 requires-python = ">=3.9"
 dependencies = [
@@ -221,7 +221,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="极智 DAAS 智能问数优化 Demo", lifespan=lifespan)
+app = FastAPI(title="GeniusQ DaaS Platform 智能问数优化 Demo", lifespan=lifespan)
 
 
 @app.get("/api/health")
@@ -749,7 +749,7 @@ git commit -m "feat: add dashboards and requirement traceability API"
 ```json
 // frontend/package.json
 {
-  "name": "daas-intelligent-query-demo-ui",
+  "name": "geniusq-daas-platform-ui",
   "private": true,
   "type": "module",
   "scripts": {

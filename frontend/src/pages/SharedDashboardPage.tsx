@@ -27,7 +27,7 @@ export function SharedDashboardPage() {
   return (
     <main className="shared-dashboard-page">
       <header className="shared-topbar">
-        <div className="brand-mark"><span>J</span><strong>极智 DAAS</strong></div>
+        <div className="brand-mark"><span>G</span><strong>GeniusQ DaaS</strong></div>
         <span className="readonly-chip">只读分享</span>
       </header>
       <section className="shared-dashboard-content">

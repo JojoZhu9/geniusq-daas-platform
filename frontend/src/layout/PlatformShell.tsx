@@ -11,7 +11,7 @@ export function PlatformShell() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="brand-mark"><span>J</span><strong>极智 DAAS</strong></div>
+        <div className="brand-mark"><span>G</span><strong>GeniusQ DaaS</strong></div>
         <nav className="product-nav" aria-label="平台模块">
           <span>数据建模</span>
           <span>数据呈现</span>

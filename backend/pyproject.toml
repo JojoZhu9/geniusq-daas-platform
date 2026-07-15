@@ -1,5 +1,5 @@
 [project]
-name = "daas-intelligent-query-demo"
+name = "geniusq-daas-platform"
 version = "0.1.0"
 requires-python = ">=3.9"
 dependencies = [
