@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, vi } from "vitest";
 import { DashboardWorkspace } from "../pages/DashboardWorkspace";
@@ -161,6 +161,41 @@ test("automatically compacts a legacy single-column layout into two columns", as
   expect(cards[3]).toHaveStyle({ gridColumnStart: "7", gridRowStart: "5" });
 });
 
+test("compacts a legacy single-column layout even when deleted cards left row gaps", async () => {
+  let current = {
+    ...stackedDashboard,
+    cards: stackedDashboard.cards.filter((card) => card.id !== "card-2")
+  };
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([current]);
+    if (path === "/api/dashboards/d1/layout" && init?.method === "PATCH") {
+      const payload = JSON.parse(String(init.body));
+      current = {
+        ...current,
+        cards: current.cards.map((card) => {
+          const next = payload.cards.find((item: { id: string }) => item.id === card.id);
+          return next ? { ...card, layout: { x: next.x, y: next.y, w: next.w, h: next.h } } : card;
+        })
+      };
+      return json(current);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace(<DashboardWorkspace />);
+
+  const cards = await screen.findAllByRole("article");
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+    "/api/dashboards/d1/layout",
+    expect.objectContaining({ method: "PATCH" })
+  ));
+  expect(cards[0]).toHaveStyle({ gridColumnStart: "1", gridRowStart: "1" });
+  expect(cards[1]).toHaveStyle({ gridColumnStart: "7", gridRowStart: "1" });
+  expect(cards[2]).toHaveStyle({ gridColumnStart: "1", gridRowStart: "5" });
+});
+
 test("drags a card onto another card and persists their swapped positions", async () => {
   let current = twoColumnDashboard;
   let savedCards: Array<{ id: string; x: number; y: number; w: number; h: number }> = [];
@@ -195,4 +230,56 @@ test("drags a card onto another card and persists their swapped positions", asyn
   expect(leftCard).toHaveStyle({ gridColumnStart: "7" });
   expect(rightCard).toHaveStyle({ gridColumnStart: "1" });
   expect(await screen.findByText("布局已保存")).toBeVisible();
+});
+
+test("clears the drag session when the pointer is released outside the dashboard grid", async () => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([twoColumnDashboard]);
+    if (path === "/api/dashboards/d1/layout" && init?.method === "PATCH") return json(twoColumnDashboard);
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace(<DashboardWorkspace />);
+  const handle = await screen.findByRole("button", { name: "拖动卡片：左侧图表" });
+  const rightCard = screen.getByRole("heading", { name: "右侧图表" }).closest("article")!;
+  fireEvent.pointerDown(handle, { button: 0 });
+  fireEvent.pointerUp(window);
+  fireEvent.pointerUp(rightCard);
+
+  expect(fetchMock).not.toHaveBeenCalledWith(
+    "/api/dashboards/d1/layout",
+    expect.objectContaining({ method: "PATCH" })
+  );
+});
+
+test("reflows neighboring cards when a two-column card is enlarged", async () => {
+  let current = twoColumnDashboard;
+  let savedCards: Array<{ id: string; x: number; y: number; w: number; h: number }> = [];
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([current]);
+    if (path === "/api/dashboards/d1/layout" && init?.method === "PATCH") {
+      savedCards = JSON.parse(String(init.body)).cards;
+      current = {
+        ...current,
+        cards: current.cards.map((card) => {
+          const next = savedCards.find((item) => item.id === card.id);
+          return next ? { ...card, layout: { x: next.x, y: next.y, w: next.w, h: next.h } } : card;
+        })
+      };
+      return json(current);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  }));
+
+  renderWorkspace(<DashboardWorkspace />);
+  const leftCard = (await screen.findByRole("heading", { name: "左侧图表" })).closest("article")!;
+  await userEvent.click(within(leftCard).getByRole("button", { name: "放大卡片" }));
+
+  await waitFor(() => expect(savedCards).toEqual(expect.arrayContaining([
+    { id: "card-1", x: 0, y: 0, w: 9, h: 5 },
+    { id: "card-2", x: 0, y: 8, w: 6, h: 4 }
+  ])));
 });

@@ -12,14 +12,7 @@ function layoutItem(card: DashboardCard, position: Partial<DashboardCard["layout
 
 function isLegacySingleColumn(cards: DashboardCard[]) {
   if (cards.length < 2) return false;
-  let expectedY = 0;
-  return cards.every((card) => {
-    const matches = card.layout.x === 0
-      && card.layout.y === expectedY
-      && card.layout.w === 6;
-    expectedY += card.layout.h;
-    return matches;
-  });
+  return cards.every((card) => card.layout.x === 0 && card.layout.w === 6);
 }
 
 function compactIntoTwoColumns(cards: DashboardCard[]): LayoutItem[] {
@@ -33,6 +26,34 @@ function compactIntoTwoColumns(cards: DashboardCard[]): LayoutItem[] {
     y += Math.max(left.layout.h, right?.layout.h ?? 0);
   }
   return result;
+}
+
+function layoutsOverlap(left: DashboardCard["layout"], right: DashboardCard["layout"]) {
+  return left.x < right.x + right.w
+    && left.x + left.w > right.x
+    && left.y < right.y + right.h
+    && left.y + left.h > right.y;
+}
+
+function firstOpenPosition(card: DashboardCard, occupied: LayoutItem[]): LayoutItem {
+  const rightX = Math.max(0, 12 - card.layout.w);
+  const candidateXs = card.layout.w <= 6 ? [0, 6] : [0, rightX];
+  for (let row = 0; row <= occupied.length * 3 + 3; row += 1) {
+    for (const x of [...new Set(candidateXs)]) {
+      const candidate = layoutItem(card, { x, y: row * 4 });
+      if (!occupied.some((item) => layoutsOverlap(candidate, item))) return candidate;
+    }
+  }
+  return layoutItem(card, { x: 0, y: (occupied.length + 1) * 4 });
+}
+
+function reflowAroundCard(cards: DashboardCard[], fixed: LayoutItem): LayoutItem[] {
+  const occupied = [fixed];
+  const remaining = cards
+    .filter((card) => card.id !== fixed.id)
+    .sort((left, right) => left.layout.y - right.layout.y || left.layout.x - right.layout.x);
+  for (const card of remaining) occupied.push(firstOpenPosition(card, occupied));
+  return occupied;
 }
 
 export function DashboardWorkspace() {
@@ -56,6 +77,16 @@ export function DashboardWorkspace() {
     setDashboard(loaded);
   }
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (!draggedCardId) return undefined;
+    const releaseOutsideGrid = () => finishDrag();
+    window.addEventListener("pointerup", releaseOutsideGrid);
+    window.addEventListener("pointercancel", releaseOutsideGrid);
+    return () => {
+      window.removeEventListener("pointerup", releaseOutsideGrid);
+      window.removeEventListener("pointercancel", releaseOutsideGrid);
+    };
+  }, [draggedCardId]);
 
   async function create() {
     const next = await api.post<Dashboard>("/api/dashboards", { name: "房价分析看板" });
@@ -66,16 +97,12 @@ export function DashboardWorkspace() {
     if (!dashboard) return;
     const isLarge = card.layout.w >= 9;
     const nextWidth = isLarge ? 6 : 9;
-    const next = await api.patch<Dashboard>(`/api/dashboards/${dashboard.id}/layout`, {
-      cards: [{
-        id: card.id,
-        x: Math.min(card.layout.x, 12 - nextWidth),
-        y: card.layout.y,
-        w: nextWidth,
-        h: isLarge ? 4 : 5
-      }]
-    });
-    setDashboard(next);
+    await saveLayout(reflowAroundCard(dashboard.cards, layoutItem(card, {
+      x: Math.min(card.layout.x, 12 - nextWidth),
+      y: card.layout.y,
+      w: nextWidth,
+      h: isLarge ? 4 : 5
+    })));
     setNotice(isLarge ? "已恢复默认尺寸" : "布局已保存");
   }
 
