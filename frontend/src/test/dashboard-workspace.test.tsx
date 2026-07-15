@@ -93,3 +93,19 @@ test("renders the saved analysis chart and allows switching to its data table", 
   expect(await screen.findByRole("table")).toHaveTextContent("海淀区");
   expect(screen.getByRole("table")).toHaveTextContent("101200");
 });
+
+test("keeps the dashboard visible while a legacy API response has no datasets", async () => {
+  const legacyDashboard = {
+    ...dashboard,
+    cards: dashboard.cards.map(({ datasets: _datasets, ...card }) => card)
+  };
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+    if (String(input) === "/api/dashboards") return json([legacyDashboard]);
+    throw new Error(`Unexpected request: ${String(input)}`);
+  }));
+
+  renderWorkspace(<DashboardWorkspace />);
+
+  expect(await screen.findByRole("heading", { name: "2025年各区平均房价" })).toBeVisible();
+  expect(screen.getByRole("status")).toHaveTextContent("原分析数据尚未加载");
+});

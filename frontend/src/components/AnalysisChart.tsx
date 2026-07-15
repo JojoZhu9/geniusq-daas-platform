@@ -151,11 +151,11 @@ function EChartView({
 
 export function AnalysisChart({
   chart,
-  datasets,
+  datasets = [],
   onTypeChange
 }: {
   chart: ChartSpec;
-  datasets: Dataset[];
+  datasets?: Dataset[];
   onTypeChange?: (type: ChartType) => void;
 }) {
   const [type, setType] = useState<ChartType>(chart.type === "table" ? "table" : chart.type);
@@ -204,7 +204,9 @@ export function AnalysisChart({
             正在切换到{typeLabel}…
           </div>
         )}
-        {type === "table" ? (
+        {allRows.length === 0 ? (
+          <div className="chart-fallback" role="status">原分析数据尚未加载，请刷新页面。</div>
+        ) : type === "table" ? (
           <div className="table-scroll">
             <table className="data-table">
               <thead><tr>{tableFields.map((field) => <th key={field}>{field}</th>)}</tr></thead>
