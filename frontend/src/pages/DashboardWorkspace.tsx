@@ -21,12 +21,13 @@ export function DashboardWorkspace() {
   async function resize(card: DashboardCard) {
     if (!dashboard) return;
     const isLarge = card.layout.w >= 9;
+    const nextWidth = isLarge ? 6 : 9;
     const next = await api.patch<Dashboard>(`/api/dashboards/${dashboard.id}/layout`, {
       cards: [{
         id: card.id,
-        x: card.layout.x,
+        x: Math.min(card.layout.x, 12 - nextWidth),
         y: card.layout.y,
-        w: isLarge ? 6 : 9,
+        w: nextWidth,
         h: isLarge ? 4 : 5
       }]
     });
@@ -36,8 +37,9 @@ export function DashboardWorkspace() {
 
   async function move(card: DashboardCard) {
     if (!dashboard) return;
+    const rightX = Math.max(0, 12 - card.layout.w);
     const next = await api.patch<Dashboard>(`/api/dashboards/${dashboard.id}/layout`, {
-      cards: [{ ...card.layout, id: card.id, x: card.layout.x === 0 ? 6 : 0 }]
+      cards: [{ ...card.layout, id: card.id, x: card.layout.x === 0 ? rightX : 0 }]
     });
     setDashboard(next);
     setNotice("布局已保存");
@@ -71,7 +73,19 @@ export function DashboardWorkspace() {
           <div className="dashboard-summary panel"><div><small>卡片数量</small><strong>{dashboard.cards.length}</strong></div><div><small>布局规格</small><strong>12 列栅格</strong></div><div><small>分享标识</small><strong>{dashboard.share_id.slice(0, 8)}</strong></div><RequirementBadge id="2.6" /></div>
           <div className="dashboard-grid">
             {dashboard.cards.map((card) => (
-              <article className="dashboard-card panel" key={card.id} style={{ gridColumn: `span ${card.layout.w}`, minHeight: `${card.layout.h * 58}px` }}>
+              <article
+                aria-label={`${card.title} 仪表盘卡片`}
+                className="dashboard-card panel"
+                data-grid-x={card.layout.x}
+                data-grid-y={card.layout.y}
+                key={card.id}
+                style={{
+                  gridColumnStart: card.layout.x + 1,
+                  gridColumnEnd: `span ${card.layout.w}`,
+                  gridRowStart: card.layout.y + 1,
+                  gridRowEnd: `span ${card.layout.h}`
+                }}
+              >
                 <div className="card-head"><div><small>{card.chart.type.toUpperCase()} · 智能问数</small><h2>{card.title}</h2></div><span className="drag-handle" aria-label="可移动卡片">⠿</span></div>
                 <div className="card-chart-placeholder"><i /><i /><i /><i /><i /><i /></div>
                 <div className="card-footer"><span>{card.layout.w} × {card.layout.h}</span><div><button type="button" onClick={() => move(card)}>移动卡片</button><button type="button" onClick={() => resize(card)}>{card.layout.w >= 9 ? "恢复尺寸" : "放大卡片"}</button><button type="button" onClick={() => remove(card)}>移除</button></div></div>
