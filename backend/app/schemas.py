@@ -61,6 +61,18 @@ class RetrievedKnowledge(BaseModel):
     score: float
 
 
+class SemanticMetric(BaseModel):
+    id: str
+    name: str
+    aliases: List[str]
+    description: str
+    formula: str
+    fields: List[str]
+    tables: List[str]
+    dimensions: List[str] = Field(default_factory=list)
+    score: float = 0
+
+
 class TextToSqlResult(BaseModel):
     sql: str = ""
     reasoning: str = ""

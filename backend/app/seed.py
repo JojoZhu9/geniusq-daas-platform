@@ -110,6 +110,19 @@ SCHEMA_STATEMENTS = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS semantic_metrics (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        aliases_json TEXT NOT NULL,
+        description TEXT NOT NULL,
+        formula TEXT NOT NULL,
+        fields_json TEXT NOT NULL,
+        tables_json TEXT NOT NULL,
+        dimensions_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS data_tables (
         name TEXT PRIMARY KEY,
         status TEXT NOT NULL,
@@ -430,6 +443,64 @@ def seed_all(engine: Engine) -> None:
                     "schema_status": "valid",
                     "overrides_id": None,
                     "created_at": "2026-07-14T00:02:00+08:00",
+                },
+            ],
+        )
+        connection.execute(
+            text(
+                """
+                INSERT OR REPLACE INTO semantic_metrics
+                    (id, name, aliases_json, description, formula,
+                     fields_json, tables_json, dimensions_json, created_at)
+                VALUES
+                    (:id, :name, :aliases, :description, :formula,
+                     :fields, :tables, :dimensions, :created_at)
+                """
+            ),
+            [
+                {
+                    "id": "inventory_pressure",
+                    "name": "库存压力",
+                    "aliases": '["库存压力", "去化压力", "供需压力", "库存去化"]',
+                    "description": "用挂牌量与成交量的比值衡量区域库存压力，比值越高表示去化压力越大。",
+                    "formula": "listing_count / transaction_count",
+                    "fields": '["listing_count", "transaction_count"]',
+                    "tables": '["house_price_monthly", "housing_transactions"]',
+                    "dimensions": '["month", "district"]',
+                    "created_at": "2026-07-16T00:00:00+08:00",
+                },
+                {
+                    "id": "rent_to_price_ratio",
+                    "name": "租售比",
+                    "aliases": '["租售比", "租金回报", "租金收益率", "租价比"]',
+                    "description": "用月租金折年后与平均房价对比，衡量租金回报水平。",
+                    "formula": "rent_price * 12 / avg_price",
+                    "fields": '["rent_price", "avg_price"]',
+                    "tables": '["house_price_monthly"]',
+                    "dimensions": '["month", "district"]',
+                    "created_at": "2026-07-16T00:00:00+08:00",
+                },
+                {
+                    "id": "metro_coverage",
+                    "name": "地铁覆盖率",
+                    "aliases": '["地铁覆盖率", "轨道覆盖", "交通覆盖", "地铁"]',
+                    "description": "衡量区域轨道交通覆盖水平，可用于分析交通便利度与房价关系。",
+                    "formula": "metro_coverage_rate",
+                    "fields": '["metro_coverage_rate"]',
+                    "tables": '["commuting_metrics"]',
+                    "dimensions": '["year", "district"]',
+                    "created_at": "2026-07-16T00:00:00+08:00",
+                },
+                {
+                    "id": "employment_density",
+                    "name": "就业密度",
+                    "aliases": '["就业密度", "岗位密度", "就业集中度"]',
+                    "description": "衡量区域就业资源集中程度，可用于分析职住关系和房价支撑。",
+                    "formula": "employment_density",
+                    "fields": '["employment_density"]',
+                    "tables": '["commuting_metrics"]',
+                    "dimensions": '["year", "district"]',
+                    "created_at": "2026-07-16T00:00:00+08:00",
                 },
             ],
         )

@@ -122,6 +122,7 @@ button { border: 0; }
 .knowledge-chips { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
 .knowledge-chips > span { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #d8e7f4; border-radius: 999px; color: #27618e; background: #fff; font-size: 10px; }
 .knowledge-chips small { color: #7e8fa1; }
+.semantic-chips > span { border-color: #d9d2f5; color: #5b4ca7; background: #f7f4ff; }
 .thinking-timeline { margin: 0; padding: 12px 14px 2px; list-style: none; background: #f8fafc; }
 .thinking-timeline li { position: relative; display: grid; grid-template-columns: 25px minmax(0, 1fr) auto; gap: 9px; padding-bottom: 13px; }
 .thinking-timeline li:not(:last-child)::after { content: ""; position: absolute; left: 11px; top: 23px; bottom: 1px; width: 1px; background: #cdd9e5; transform-origin: top; }

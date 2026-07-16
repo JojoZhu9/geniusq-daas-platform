@@ -55,6 +55,14 @@ export type AnalysisResponse = {
       linked_tables: string[];
       score: number;
     }[];
+    used_metrics?: {
+      id: string;
+      name: string;
+      formula: string;
+      fields: string[];
+      tables: string[];
+      description: string;
+    }[];
     [key: string]: unknown;
   };
   created_at: string;

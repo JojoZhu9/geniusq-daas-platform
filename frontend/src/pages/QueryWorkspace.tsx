@@ -286,6 +286,16 @@ export function QueryWorkspace() {
                               ))}
                             </div>
                           )}
+                          {!!exchange.response.metadata.used_metrics?.length && (
+                            <div className="knowledge-chips semantic-chips" aria-label="命中指标口径">
+                              {exchange.response.metadata.used_metrics.map((item) => (
+                                <span key={item.id}>
+                                  {item.name}
+                                  <small>{item.formula}</small>
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </section>
                       )}
                       <div className="insight-grid">

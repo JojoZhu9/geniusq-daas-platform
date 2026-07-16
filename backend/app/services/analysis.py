@@ -11,6 +11,7 @@ from app.schemas import (
     QueryContext,
 )
 from app.services.retrieval import retrieve_relevant_knowledge
+from app.services.semantic import retrieve_semantic_metrics
 from app.services.text_to_sql import DeepSeekTextToSqlService
 
 
@@ -217,7 +218,13 @@ class DeepSeekAnalysisEngine:
         if self._is_simple_question(question, context):
             return self._simple_question_plan()
         knowledge = retrieve_relevant_knowledge(self.session, question)
-        result = self.service.generate(question, context, knowledge)
+        metrics = retrieve_semantic_metrics(self.session, question)
+        try:
+            result = self.service.generate(question, context, knowledge, metrics)
+        except TypeError as exc:
+            if "positional" not in str(exc) and "argument" not in str(exc):
+                raise
+            result = self.service.generate(question, context, knowledge)
         used_knowledge = [
             {
                 "id": item.id,
@@ -229,6 +236,17 @@ class DeepSeekAnalysisEngine:
             }
             for item in knowledge
             if item.id in result.used_knowledge_ids
+        ]
+        used_metrics = [
+            {
+                "id": item.id,
+                "name": item.name,
+                "formula": item.formula,
+                "fields": item.fields,
+                "tables": item.tables,
+                "description": item.description,
+            }
+            for item in metrics
         ]
         if result.needs_clarification:
             return AnalysisPlan(
@@ -246,6 +264,7 @@ class DeepSeekAnalysisEngine:
                     "mode": "deepseek",
                     "model": self.settings.deepseek_model,
                     "used_knowledge": used_knowledge,
+                    "used_metrics": used_metrics,
                     "model_reasoning": result.reasoning,
                     "confidence": result.confidence,
                     "sql_validation_status": "not_run",
@@ -308,6 +327,7 @@ class DeepSeekAnalysisEngine:
                 "mode": "deepseek",
                 "model": self.settings.deepseek_model,
                 "used_knowledge": used_knowledge,
+                "used_metrics": used_metrics,
                 "model_reasoning": result.reasoning,
                 "confidence": result.confidence,
                 "sql_validation_status": "pending",
@@ -370,14 +390,28 @@ class DeepSeekAnalysisEngine:
         repair_reason: str,
     ):
         knowledge = retrieve_relevant_knowledge(self.session, question)
-        return self.service.repair_sql(
-            question,
-            context,
-            knowledge,
-            failed_sql,
-            error_message,
-            repair_reason,
-        )
+        metrics = retrieve_semantic_metrics(self.session, question)
+        try:
+            return self.service.repair_sql(
+                question,
+                context,
+                knowledge,
+                failed_sql,
+                error_message,
+                repair_reason,
+                metrics,
+            )
+        except TypeError as exc:
+            if "positional" not in str(exc) and "argument" not in str(exc):
+                raise
+            return self.service.repair_sql(
+                question,
+                context,
+                knowledge,
+                failed_sql,
+                error_message,
+                repair_reason,
+            )
 
     @staticmethod
     def _follow_ups(context: QueryContext) -> list[str]:

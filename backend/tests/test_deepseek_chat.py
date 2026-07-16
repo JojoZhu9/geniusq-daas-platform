@@ -90,6 +90,55 @@ def test_deepseek_mode_executes_safe_generated_sql(client, monkeypatch):
     ]
 
 
+def test_deepseek_mode_uses_semantic_metric_context(client, monkeypatch):
+    _deepseek_env(monkeypatch)
+
+    def fake_generate(self, question, context, knowledge, metrics=None):
+        assert metrics
+        assert [metric.id for metric in metrics] == ["inventory_pressure"]
+        return TextToSqlResult(
+            sql=(
+                "SELECT p.month, p.district, "
+                "ROUND(CAST(p.listing_count AS REAL) / t.transaction_count, 4) AS inventory_pressure "
+                "FROM house_price_monthly AS p "
+                "JOIN housing_transactions AS t ON p.district = t.district AND p.month = t.month "
+                "WHERE p.month LIKE '2025-%' ORDER BY p.month, p.district"
+            ),
+            reasoning="命中语义指标库存压力，按 listing_count / transaction_count 计算。",
+            chart=ChartSpec(
+                type="line",
+                x_field="month",
+                y_fields=["inventory_pressure"],
+                title="2025年各区库存压力趋势",
+            ),
+            confidence=0.9,
+            used_knowledge_ids=[item.id for item in knowledge],
+        )
+
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "generate", fake_generate)
+    conversation_id = client.post("/api/conversations").json()["id"]
+
+    response = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "分析2025年各区库存压力趋势"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["datasets"][0]["rows"]
+    assert body["chart"]["y_fields"] == ["inventory_pressure"]
+    assert body["metadata"]["used_metrics"] == [
+        {
+            "id": "inventory_pressure",
+            "name": "库存压力",
+            "formula": "listing_count / transaction_count",
+            "fields": ["listing_count", "transaction_count"],
+            "tables": ["house_price_monthly", "housing_transactions"],
+            "description": "用挂牌量与成交量的比值衡量区域库存压力，比值越高表示去化压力越大。",
+        }
+    ]
+
+
 def test_deepseek_mode_repairs_irrelevant_or_invalid_chart_fields(client, monkeypatch):
     _deepseek_env(monkeypatch)
 

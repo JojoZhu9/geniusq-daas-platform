@@ -6,7 +6,13 @@ from typing import Any
 
 import httpx
 
-from app.schemas import ChartSpec, QueryContext, RetrievedKnowledge, TextToSqlResult
+from app.schemas import (
+    ChartSpec,
+    QueryContext,
+    RetrievedKnowledge,
+    SemanticMetric,
+    TextToSqlResult,
+)
 
 
 class ModelOutputError(ValueError):
@@ -47,6 +53,7 @@ class DeepSeekTextToSqlService:
         question: str,
         context: QueryContext,
         knowledge: list[RetrievedKnowledge],
+        metrics: list[SemanticMetric] | None = None,
     ) -> TextToSqlResult:
         payload = {
             "model": self.model,
@@ -54,7 +61,7 @@ class DeepSeekTextToSqlService:
                 {"role": "system", "content": self._system_prompt()},
                 {
                     "role": "user",
-                    "content": self._user_prompt(question, context, knowledge),
+                    "content": self._user_prompt(question, context, knowledge, metrics or []),
                 },
             ],
             "temperature": 0.1,
@@ -84,6 +91,7 @@ class DeepSeekTextToSqlService:
         failed_sql: str,
         error_message: str,
         repair_reason: str,
+        metrics: list[SemanticMetric] | None = None,
     ) -> TextToSqlResult:
         payload = {
             "model": self.model,
@@ -95,6 +103,7 @@ class DeepSeekTextToSqlService:
                         question,
                         context,
                         knowledge,
+                        metrics or [],
                         failed_sql,
                         error_message,
                         repair_reason,
@@ -145,6 +154,7 @@ class DeepSeekTextToSqlService:
         question: str,
         context: QueryContext,
         knowledge: list[RetrievedKnowledge],
+        metrics: list[SemanticMetric] | None = None,
     ) -> str:
         knowledge_lines = [
             (
@@ -152,6 +162,15 @@ class DeepSeekTextToSqlService:
                 f"tables={','.join(item.linked_tables)}\n{item.content}"
             )
             for item in knowledge
+        ]
+        metric_lines = [
+            (
+                f"- [{item.id}] {item.name}: {item.description}\n"
+                f"  formula={item.formula}; fields={','.join(item.fields)}; "
+                f"tables={','.join(item.tables)}; dimensions={','.join(item.dimensions)}; "
+                f"aliases={','.join(item.aliases)}"
+            )
+            for item in (metrics or [])
         ]
         return "\n".join(
             [
@@ -163,6 +182,9 @@ class DeepSeekTextToSqlService:
                 "",
                 "检索到的知识：",
                 "\n".join(knowledge_lines) or "无",
+                "",
+                "命中的业务指标口径：",
+                "\n".join(metric_lines) or "无",
                 "",
                 f"当前上下文：{context.model_dump_json()}",
                 f"用户问题：{question}",
@@ -176,13 +198,14 @@ class DeepSeekTextToSqlService:
         question: str,
         context: QueryContext,
         knowledge: list[RetrievedKnowledge],
+        metrics: list[SemanticMetric],
         failed_sql: str,
         error_message: str,
         repair_reason: str,
     ) -> str:
         return "\n".join(
             [
-                DeepSeekTextToSqlService._user_prompt(question, context, knowledge),
+                DeepSeekTextToSqlService._user_prompt(question, context, knowledge, metrics),
                 "",
                 "上一次 SQL 需要修复：",
                 failed_sql,
