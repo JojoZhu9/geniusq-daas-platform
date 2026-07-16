@@ -59,8 +59,8 @@ def test_deepseek_service_generates_text_to_sql_result():
     client = FakeClient()
     service = DeepSeekTextToSqlService(
         api_key="test-key",
-        base_url="https://api.deepseek.com/v1",
-        model="deepseek-chat",
+        base_url="https://api.deepseek.com",
+        model="deepseek-v4-flash",
         client=client,
     )
     knowledge = [
@@ -84,3 +84,7 @@ def test_deepseek_service_generates_text_to_sql_result():
     assert result.confidence == 0.84
     assert result.used_knowledge_ids == ["knowledge-sql-trend"]
     assert client.requests[0]["headers"]["Authorization"] == "Bearer test-key"
+    assert client.requests[0]["url"] == "https://api.deepseek.com/chat/completions"
+    assert client.requests[0]["json"]["model"] == "deepseek-v4-flash"
+    assert client.requests[0]["json"]["response_format"] == {"type": "json_object"}
+    assert client.requests[0]["json"]["max_tokens"] == 1200

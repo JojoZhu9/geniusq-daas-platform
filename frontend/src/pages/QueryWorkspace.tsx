@@ -154,7 +154,7 @@ export function QueryWorkspace() {
                           <div>
                             <small>当前模式</small>
                             <strong>DeepSeek Text-to-SQL</strong>
-                            <span>{exchange.response.metadata.model ?? "deepseek-chat"}</span>
+                            <span>{exchange.response.metadata.model ?? "deepseek-v4-flash"}</span>
                           </div>
                           <div>
                             <small>SQL 校验</small>

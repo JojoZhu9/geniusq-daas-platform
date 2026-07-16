@@ -130,7 +130,7 @@ test("shows deepseek metadata and saves positive feedback", async () => {
     analysis_id: "a-deepseek",
     metadata: {
       mode: "deepseek",
-      model: "deepseek-chat",
+      model: "deepseek-v4-flash",
       model_reasoning: "使用房价月度表生成趋势查询",
       confidence: 0.81,
       sql_validation_status: "passed",

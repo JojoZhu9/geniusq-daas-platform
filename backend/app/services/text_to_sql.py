@@ -59,6 +59,7 @@ class DeepSeekTextToSqlService:
             ],
             "temperature": 0.1,
             "response_format": {"type": "json_object"},
+            "max_tokens": 1200,
         }
         response = self.client.post(
             f"{self.base_url}/chat/completions",
@@ -81,6 +82,10 @@ class DeepSeekTextToSqlService:
             "你是企业数据平台的 Text-to-SQL 助手。只返回 JSON。"
             "SQL 必须是 SQLite 单条 SELECT 或 WITH 查询；只能使用提供的表和字段；"
             "不允许 INSERT、UPDATE、DELETE、DROP、ALTER、CREATE。"
+            "JSON 示例："
+            '{"needs_clarification":false,"suggestions":[],"sql":"SELECT ...",'
+            '"reasoning":"...","chart_suggestion":{"type":"line","x_field":"month",'
+            '"y_fields":["avg_price"],"title":"..."}, "confidence":0.8}'
         )
 
     @staticmethod
