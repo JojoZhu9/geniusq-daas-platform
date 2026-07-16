@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, vi } from "vitest";
 import { ThinkingTimeline } from "../components/ThinkingTimeline";
-import { QueryWorkspace } from "../pages/QueryWorkspace";
+import { QueryWorkspace, liveThinkingSteps } from "../pages/QueryWorkspace";
 
 const completedAnalysis = {
   status: "completed",
@@ -64,7 +64,18 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-test("renders agent tool input and output summaries in the thinking timeline", () => {
+test("live thinking reveals only completed steps plus the active tool step", () => {
+  expect(liveThinkingSteps(0).map((step) => step.status)).toEqual(["running"]);
+  expect(liveThinkingSteps(1).map((step) => step.status)).toEqual(["completed", "running"]);
+  expect(liveThinkingSteps(3).map((step) => step.status)).toEqual([
+    "completed",
+    "completed",
+    "completed",
+    "running"
+  ]);
+});
+
+test("renders called tool without input and output summaries in the thinking timeline", () => {
   render(
     <ThinkingTimeline
       steps={[{
@@ -84,9 +95,9 @@ test("renders agent tool input and output summaries in the thinking timeline", (
 
   expect(screen.getByText("调用工具")).toBeVisible();
   expect(screen.getByText("数据表字段选择器")).toBeVisible();
-  expect(screen.getByText("输入摘要")).toBeVisible();
-  expect(screen.getByText("输出摘要")).toBeVisible();
-  expect(screen.getByText("选择 house_price_monthly 表")).toBeVisible();
+  expect(screen.queryByText("输入摘要")).not.toBeInTheDocument();
+  expect(screen.queryByText("输出摘要")).not.toBeInTheDocument();
+  expect(screen.queryByText("选择 house_price_monthly 表")).not.toBeInTheDocument();
   expect(screen.queryByText("schema_selector")).not.toBeInTheDocument();
 });
 

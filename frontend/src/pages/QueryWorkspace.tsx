@@ -26,10 +26,21 @@ const LIVE_STEPS = [
   { key: "execute_and_visualize", title: "执行查询并生成图表建议", detail: "正在查询本地 SQLite，并准备图表和洞察结果…" },
 ] as const;
 
-function liveThinkingSteps(activeIndex: number) {
-  return LIVE_STEPS.map((step, index) => ({
+const LIVE_STEP_TOOLS: Record<string, string> = {
+  understand_question: "问题理解器",
+  merge_context: "会话上下文管理器",
+  retrieve_knowledge: "知识库检索工具",
+  select_tables_fields: "数据表字段选择器",
+  deepseek_text_to_sql: "DeepSeek SQL 生成工具",
+  validate_sql: "只读 SQL 安全校验器",
+  execute_and_visualize: "SQLite 查询与图表工具",
+};
+
+export function liveThinkingSteps(activeIndex: number) {
+  return LIVE_STEPS.slice(0, Math.min(activeIndex + 1, LIVE_STEPS.length)).map((step, index) => ({
     ...step,
-    status: index < activeIndex ? "completed" : index === activeIndex ? "running" : "pending"
+    tool_label: LIVE_STEP_TOOLS[step.key],
+    status: index < activeIndex ? "completed" : "running"
   } as const));
 }
 
