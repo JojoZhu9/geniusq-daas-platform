@@ -88,3 +88,33 @@ def test_deepseek_service_generates_text_to_sql_result():
     assert client.requests[0]["json"]["model"] == "deepseek-v4-flash"
     assert client.requests[0]["json"]["response_format"] == {"type": "json_object"}
     assert client.requests[0]["json"]["max_tokens"] == 1200
+
+
+def test_deepseek_service_accepts_scatter_chart_metadata():
+    result = DeepSeekTextToSqlService._normalize_result(
+        {
+            "sql": "SELECT district, avg_price, rent_price FROM house_price_monthly",
+            "reasoning": "compare price and rent",
+            "chart_suggestion": {
+                "type": "scatter",
+                "x_field": "avg_price",
+                "y_fields": ["rent_price"],
+                "title": "Price rent relation",
+                "x_axis_name": "Average price",
+                "y_axis_name": "Rent",
+                "unit": "yuan",
+                "series_mode": "relation",
+                "recommended_reason": "Two numeric metrics are best shown as a scatter plot",
+            },
+            "confidence": 0.77,
+        },
+        [],
+    )
+
+    assert result.chart is not None
+    assert result.chart.type == "scatter"
+    assert result.chart.x_axis_name == "Average price"
+    assert result.chart.y_axis_name == "Rent"
+    assert result.chart.unit == "yuan"
+    assert result.chart.series_mode == "relation"
+    assert result.chart.recommended_reason == "Two numeric metrics are best shown as a scatter plot"

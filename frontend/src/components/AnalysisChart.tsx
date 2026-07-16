@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as echarts from "echarts/core";
-import { BarChart, LineChart } from "echarts/charts";
+import { BarChart, LineChart, PieChart, ScatterChart } from "echarts/charts";
 import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
 import type { EChartsCoreOption } from "echarts/core";
@@ -9,6 +9,8 @@ import type { ChartSpec, Dataset } from "../types";
 echarts.use([
   LineChart,
   BarChart,
+  PieChart,
+  ScatterChart,
   GridComponent,
   LegendComponent,
   TooltipComponent,
@@ -16,11 +18,24 @@ echarts.use([
 ]);
 
 type ChartType = ChartSpec["type"];
-type RenderableChartType = "line" | "bar";
+type RenderableChartType = Exclude<ChartType, "table">;
 type ChartSeries = { name: string; data: number[] };
+
+const CHART_TYPES: { type: ChartType; label: string; aria: string }[] = [
+  { type: "line", label: "折线", aria: "折线图" },
+  { type: "bar", label: "柱状", aria: "柱状图" },
+  { type: "pie", label: "饼图", aria: "饼图" },
+  { type: "scatter", label: "散点", aria: "散点图" },
+  { type: "stacked_bar", label: "堆叠", aria: "堆叠柱状图" },
+  { type: "table", label: "表格", aria: "表格" }
+];
 
 function unique(values: string[]) {
   return [...new Set(values)];
+}
+
+function chartTypeLabel(type: ChartType) {
+  return CHART_TYPES.find((item) => item.type === type)?.aria ?? "图表";
 }
 
 function buildSeries(chart: ChartSpec, datasets: Dataset[]) {
@@ -41,7 +56,7 @@ function buildSeries(chart: ChartSpec, datasets: Dataset[]) {
         return Number(row?.[valueField] ?? 0);
       })
     }));
-    return { categories, series };
+    return { categories, series, rows };
   }
 
   const rowsByCategory = new Map<string, Record<string, string | number>>();
@@ -54,39 +69,92 @@ function buildSeries(chart: ChartSpec, datasets: Dataset[]) {
     name: field,
     data: categories.map((category) => Number(rowsByCategory.get(category)?.[field] ?? 0))
   }));
-  return { categories, series };
+  return { categories, series, rows };
 }
 
 function createOption(
   type: RenderableChartType,
   chart: ChartSpec,
   categories: string[],
-  seriesRows: ChartSeries[]
+  seriesRows: ChartSeries[],
+  rows: Record<string, string | number>[]
 ): EChartsCoreOption {
-  return {
+  const common = {
     animation: false,
     color: ["#1682df", "#725fed", "#1ca779", "#f29a3f", "#e05f78", "#49a9bf"],
-    tooltip: { trigger: "axis" },
+    tooltip: { trigger: type === "pie" ? "item" : "axis" },
     legend: {
       type: "scroll",
       top: 4,
       textStyle: { color: "#52677c", fontSize: 10 }
-    },
-    grid: { top: 42, right: 24, bottom: 48, left: 68 },
+    }
+  } satisfies EChartsCoreOption;
+
+  if (type === "pie") {
+    const valueField = chart.y_fields[0];
+    return {
+      ...common,
+      series: [{
+        name: valueField,
+        type: "pie",
+        radius: ["38%", "68%"],
+        center: ["50%", "55%"],
+        data: categories.map((category) => {
+          const row = rows.find((item) => String(item[chart.x_field]) === category);
+          return { name: category, value: Number(row?.[valueField] ?? 0) };
+        }),
+        emphasis: { focus: "self" }
+      }]
+    };
+  }
+
+  if (type === "scatter") {
+    const yField = chart.y_fields[0];
+    return {
+      ...common,
+      grid: { top: 42, right: 24, bottom: 52, left: 68 },
+      xAxis: {
+        type: "value",
+        name: chart.x_axis_name ?? chart.x_field,
+        axisLabel: { color: "#687d91", fontSize: 10 },
+        splitLine: { lineStyle: { color: "#edf1f5" } }
+      },
+      yAxis: {
+        type: "value",
+        name: chart.y_axis_name ?? yField,
+        axisLabel: { color: "#687d91", fontSize: 10 },
+        splitLine: { lineStyle: { color: "#edf1f5" } }
+      },
+      series: [{
+        name: yField,
+        type: "scatter",
+        symbolSize: 10,
+        data: rows.map((row) => [Number(row[chart.x_field] ?? 0), Number(row[yField] ?? 0)])
+      }]
+    };
+  }
+
+  const isStacked = type === "stacked_bar";
+  return {
+    ...common,
+    grid: { top: 42, right: 24, bottom: 52, left: 68 },
     xAxis: {
       type: "category",
+      name: chart.x_axis_name ?? undefined,
       data: categories,
       axisLabel: { color: "#687d91", fontSize: 10, rotate: categories.length > 8 ? 30 : 0 },
       axisLine: { lineStyle: { color: "#cfd9e3" } }
     },
     yAxis: {
       type: "value",
+      name: chart.y_axis_name ?? chart.unit ?? undefined,
       axisLabel: { color: "#687d91", fontSize: 10 },
       splitLine: { lineStyle: { color: "#edf1f5" } }
     },
     series: seriesRows.map((series) => ({
       name: series.name,
-      type,
+      type: type === "line" ? "line" : "bar",
+      stack: isStacked ? "total" : undefined,
       data: series.data,
       smooth: type === "line",
       showSymbol: type === "line",
@@ -165,13 +233,13 @@ export function AnalysisChart({
   const allRows = datasets.flatMap((dataset) => dataset.rows);
   const chartModel = useMemo(() => buildSeries(chart, datasets), [chart, datasets]);
   const option = useMemo(
-    () => type === "line" || type === "bar"
-      ? createOption(type, chart, chartModel.categories, chartModel.series)
+    () => type !== "table"
+      ? createOption(type, chart, chartModel.categories, chartModel.series, chartModel.rows)
       : null,
     [chart, chartModel, type]
   );
 
-  const typeLabel = type === "line" ? "折线图" : type === "bar" ? "柱状图" : "表格";
+  const typeLabel = chartTypeLabel(type);
   const markViewReady = useCallback(() => setIsSwitching(false), []);
 
   useEffect(() => {
@@ -188,11 +256,15 @@ export function AnalysisChart({
   return (
     <section className="analysis-chart" aria-label={chart.title}>
       <div className="chart-toolbar">
-        <div><small>自动推荐图表</small><h3>{chart.title}</h3></div>
+        <div>
+          <small>自动推荐图表</small>
+          <h3>{chart.title}</h3>
+          {chart.recommended_reason && <p className="chart-reason">{chart.recommended_reason}</p>}
+        </div>
         <div className="segmented" aria-label="图表类型">
-          {(["line", "bar", "table"] as ChartType[]).map((item) => (
-            <button type="button" className={type === item ? "active" : ""} key={item} onClick={() => selectType(item)}>
-              {item === "line" ? "折线" : item === "bar" ? "柱状" : "表格"}
+          {CHART_TYPES.map((item) => (
+            <button type="button" className={type === item.type ? "active" : ""} key={item.type} onClick={() => selectType(item.type)}>
+              {item.label}
             </button>
           ))}
         </div>
@@ -219,7 +291,7 @@ export function AnalysisChart({
               </tbody>
             </table>
           </div>
-        ) : (type === "line" || type === "bar") && option ? (
+        ) : option ? (
           <EChartView
             key={type}
             type={type}
@@ -231,7 +303,10 @@ export function AnalysisChart({
           <div className="chart-fallback" role="status">图表数据准备中…</div>
         )}
       </div>
-      <p className="chart-footnote">共 {allRows.length} 条记录 · 可切换图表类型 · 数据来自本地 SQLite</p>
+      <p className="chart-footnote">
+        共 {allRows.length} 条记录 · 可切换图表类型 · 数据来自本地 SQLite
+        {chart.unit ? ` · 单位：${chart.unit}` : ""}
+      </p>
     </section>
   );
 }

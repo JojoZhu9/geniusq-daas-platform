@@ -21,10 +21,15 @@ export type AnalysisStep = {
 
 export type PlannedQuery = { source: string; sql: string };
 export type ChartSpec = {
-  type: "line" | "bar" | "pie" | "table";
+  type: "line" | "bar" | "pie" | "table" | "scatter" | "stacked_bar";
   x_field: string;
   y_fields: string[];
   title: string;
+  x_axis_name?: string | null;
+  y_axis_name?: string | null;
+  unit?: string | null;
+  series_mode?: string | null;
+  recommended_reason?: string | null;
 };
 export type Dataset = {
   source: string;

@@ -205,7 +205,7 @@ def _repair_chart(
     )
     if valid_chart:
         metadata["chart_validation_status"] = "passed"
-        return chart
+        return _enrich_chart_spec(chart, fields)
 
     x_field = "month" if "month" in fields else "district" if "district" in fields else fields[0]
     y_fields = _pick_y_fields(question, fields, numeric_fields)
@@ -214,11 +214,52 @@ def _repair_chart(
     metadata["chart_repair_reason"] = (
         "模型未返回图表建议或图表字段不在 SQL 查询结果中，已按实际结果字段重建图表。"
     )
-    return ChartSpec(
+    return _enrich_chart_spec(ChartSpec(
         type=chart_type,
         x_field=x_field,
         y_fields=y_fields,
         title=_chart_title(question, x_field, y_fields),
+    ), fields)
+
+
+def _field_unit(field: str) -> str | None:
+    if field in {"avg_price", "rent_price", "avg_transaction_price"}:
+        return "元/平方米"
+    if field in {"mom_change", "yoy_change", "growth_rate", "vacancy_rate", "metro_coverage_rate", "cross_district_ratio"}:
+        return "%"
+    if field in {"transaction_count", "listing_count", "resident_population", "household_count", "new_house_count", "second_hand_count"}:
+        return "数量"
+    if field in {"avg_commute_minutes"}:
+        return "分钟"
+    return None
+
+
+def _recommend_reason(chart_type: str, x_field: str) -> str:
+    if chart_type == "line" and x_field == "month":
+        return "按月份展示趋势，推荐使用折线图。"
+    if chart_type == "bar":
+        return "按区域或类别对比数值，推荐使用柱状图。"
+    if chart_type == "pie":
+        return "展示构成占比，推荐使用饼图。"
+    if chart_type == "scatter":
+        return "展示两个数值指标之间的关系，推荐使用散点图。"
+    if chart_type == "stacked_bar":
+        return "展示多个指标在同一类别下的构成，推荐使用堆叠柱状图。"
+    return "展示查询明细，推荐使用表格。"
+
+
+def _enrich_chart_spec(chart: ChartSpec, fields: list[str]) -> ChartSpec:
+    y_field = chart.y_fields[0] if chart.y_fields else ""
+    return ChartSpec(
+        type=chart.type,
+        x_field=chart.x_field,
+        y_fields=chart.y_fields,
+        title=chart.title,
+        x_axis_name=chart.x_axis_name or chart.x_field,
+        y_axis_name=chart.y_axis_name or y_field or None,
+        unit=chart.unit or _field_unit(y_field),
+        series_mode=chart.series_mode or ("stacked" if chart.type == "stacked_bar" else None),
+        recommended_reason=chart.recommended_reason or _recommend_reason(chart.type, chart.x_field),
     )
 
 

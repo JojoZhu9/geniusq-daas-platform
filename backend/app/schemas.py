@@ -30,10 +30,15 @@ class PlannedQuery(BaseModel):
 
 
 class ChartSpec(BaseModel):
-    type: Literal["line", "bar", "pie", "table"]
+    type: Literal["line", "bar", "pie", "table", "scatter", "stacked_bar"]
     x_field: str
     y_fields: List[str]
     title: str
+    x_axis_name: Optional[str] = None
+    y_axis_name: Optional[str] = None
+    unit: Optional[str] = None
+    series_mode: Optional[str] = None
+    recommended_reason: Optional[str] = None
 
 
 class AnalysisPlan(BaseModel):

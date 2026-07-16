@@ -73,6 +73,10 @@ def test_deepseek_mode_executes_safe_generated_sql(client, monkeypatch):
     assert body["metadata"]["sql_validation_status"] == "passed"
     assert body["metadata"]["used_knowledge"][0]["id"] == "knowledge-private-house-price"
     assert body["datasets"][0]["rows"]
+    assert body["chart"]["x_axis_name"] == "month"
+    assert body["chart"]["y_axis_name"] == "avg_price"
+    assert body["chart"]["unit"] == "元/平方米"
+    assert body["chart"]["recommended_reason"] == "按月份展示趋势，推荐使用折线图。"
     trace_by_key = {step["key"]: step for step in body["steps"]}
     assert trace_by_key["retrieve_knowledge"]["tool"] == "knowledge_retriever"
     assert trace_by_key["retrieve_knowledge"]["tool_label"] == "知识库检索工具"

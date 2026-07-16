@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { api } from "../api/client";
 import { AnalysisChart } from "../components/AnalysisChart";
 import { RequirementBadge } from "../components/RequirementBadge";
 import type { Dashboard, DashboardCard } from "../types";
+import { dashboardFilterOptions, filterDashboardCards } from "../utils/dashboardFilters";
 
 type LayoutItem = DashboardCard["layout"] & { id: string };
 
@@ -72,17 +73,30 @@ function reflowAroundCard(cards: DashboardCard[], fixed: LayoutItem): LayoutItem
 }
 
 export function DashboardWorkspace() {
+  const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [notice, setNotice] = useState("");
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [blankDropTarget, setBlankDropTarget] = useState<DashboardCard["layout"] | null>(null);
+  const [filters, setFilters] = useState({ year: "", district: "", metric: "" });
   const dragSession = useRef<string | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const filterOptions = useMemo(
+    () => dashboardFilterOptions(dashboard?.cards ?? []),
+    [dashboard]
+  );
+  const visibleCards = useMemo(
+    () => filterDashboardCards(dashboard?.cards ?? [], filters),
+    [dashboard, filters]
+  );
 
   async function load() {
-    const dashboards = await api.get<Dashboard[]>("/api/dashboards");
-    const loaded = dashboards[0] ?? null;
+    const loadedDashboards = await api.get<Dashboard[]>("/api/dashboards");
+    setDashboards(loadedDashboards);
+    const loaded = dashboard
+      ? loadedDashboards.find((item) => item.id === dashboard.id) ?? loadedDashboards[0] ?? null
+      : loadedDashboards[0] ?? null;
     if (loaded && isLegacySingleColumn(loaded.cards)) {
       const compacted = await api.patch<Dashboard>(`/api/dashboards/${loaded.id}/layout`, {
         cards: compactIntoTwoColumns(loaded.cards)
@@ -110,6 +124,7 @@ export function DashboardWorkspace() {
 
   async function create() {
     const next = await api.post<Dashboard>("/api/dashboards", { name: "房价分析看板" });
+    setDashboards((items) => [...items, next]);
     setDashboard(next);
   }
 
@@ -240,12 +255,47 @@ export function DashboardWorkspace() {
         <div><small>智慧问数 / 我的仪表盘</small><h1>{dashboard?.name ?? "我的仪表盘"}</h1></div>
         <div className="heading-actions"><button type="button" className="secondary-button" onClick={load}>刷新数据</button>{dashboard && <button type="button" className="primary-button" onClick={copyShare}>复制分享链接</button>}</div>
       </div>
+      <div className="dashboard-management panel">
+        {dashboards.length > 0 && (
+          <label>当前仪表盘
+            <select
+              aria-label="选择仪表盘"
+              className="dashboard-selector"
+              value={dashboard?.id ?? ""}
+              onChange={(event) => setDashboard(dashboards.find((item) => item.id === event.target.value) ?? null)}
+            >
+              {dashboards.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+        )}
+        <button type="button" className="secondary-button" onClick={create}>新建仪表盘</button>
+      </div>
       {notice && <div className="inline-alert">{notice}</div>}
       {!dashboard ? (
         <div className="panel dashboard-empty"><div className="empty-illustration">▦</div><h2>还没有仪表盘</h2><p>从智能问数结果添加图表，或先创建一个空白看板。</p><button className="primary-button" type="button" onClick={create}>创建房价分析看板</button></div>
       ) : (
         <>
           <div className="dashboard-summary panel"><div><small>卡片数量</small><strong>{dashboard.cards.length}</strong></div><div><small>布局规格</small><strong>两列 · 12 列栅格</strong></div><div><small>分享标识</small><strong>{dashboard.share_id.slice(0, 8)}</strong></div><RequirementBadge id="2.6" /></div>
+          <div className="dashboard-filters panel" aria-label="仪表盘筛选器">
+            <label>年份
+              <select value={filters.year} onChange={(event) => setFilters((value) => ({ ...value, year: event.target.value }))}>
+                <option value="">全部年份</option>
+                {filterOptions.years.map((year) => <option key={year} value={year}>{year}</option>)}
+              </select>
+            </label>
+            <label>区域
+              <select value={filters.district} onChange={(event) => setFilters((value) => ({ ...value, district: event.target.value }))}>
+                <option value="">全部区域</option>
+                {filterOptions.districts.map((district) => <option key={district} value={district}>{district}</option>)}
+              </select>
+            </label>
+            <label>指标
+              <select value={filters.metric} onChange={(event) => setFilters((value) => ({ ...value, metric: event.target.value }))}>
+                <option value="">全部指标</option>
+                {filterOptions.metrics.map((metric) => <option key={metric} value={metric}>{metric}</option>)}
+              </select>
+            </label>
+          </div>
           <div
             className="dashboard-grid"
             ref={gridRef}
@@ -253,7 +303,7 @@ export function DashboardWorkspace() {
             onPointerUp={(event) => { void dropOnGrid(event); }}
             onPointerCancel={finishDrag}
           >
-            {dashboard.cards.map((card) => (
+            {visibleCards.map((card) => (
               <article
                 aria-label={`${card.title} 仪表盘卡片`}
                 className={`dashboard-card panel${draggedCardId === card.id ? " dragging" : ""}${dropTargetId === card.id ? " drop-target" : ""}`}

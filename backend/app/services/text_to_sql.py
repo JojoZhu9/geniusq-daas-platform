@@ -229,12 +229,17 @@ class DeepSeekTextToSqlService:
         chart_payload = parsed.get("chart_suggestion") or parsed.get("chart")
         if isinstance(chart_payload, dict):
             chart_type = chart_payload.get("type")
-            if chart_type not in {"line", "bar", "pie", "table"}:
+            if chart_type not in {"line", "bar", "pie", "table", "scatter", "stacked_bar"}:
                 chart_type = "table"
             chart = ChartSpec(
                 type=chart_type,
                 x_field=str(chart_payload.get("x_field") or ""),
                 y_fields=[str(value) for value in chart_payload.get("y_fields") or []],
+                x_axis_name=chart_payload.get("x_axis_name"),
+                y_axis_name=chart_payload.get("y_axis_name"),
+                unit=chart_payload.get("unit"),
+                series_mode=chart_payload.get("series_mode"),
+                recommended_reason=chart_payload.get("recommended_reason"),
                 title=str(chart_payload.get("title") or "模型生成图表"),
             )
         return TextToSqlResult(
