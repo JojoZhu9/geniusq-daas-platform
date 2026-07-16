@@ -10,9 +10,15 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.errors import ApiError
 from app.schemas import AnalysisPlan, QueryContext
-from app.services.analysis import OfflineAnalysisEngine
-from app.services.sql_guard import TABLE_REF, execute_read_only, validate_read_only_sql
+from app.services.analysis import DeepSeekAnalysisEngine, OfflineAnalysisEngine
+from app.services.sql_guard import (
+    TABLE_REF,
+    SqlSafetyError,
+    execute_read_only,
+    validate_read_only_sql,
+)
 
 
 ALLOWED_TABLES = {
@@ -118,11 +124,18 @@ def _result_insights(plan: AnalysisPlan, datasets: list[dict[str, Any]]) -> list
     return insights
 
 
+def select_analysis_engine(session: Session):
+    settings = get_settings()
+    if settings.llm_mode == "deepseek":
+        return DeepSeekAnalysisEngine(session, settings)
+    return OfflineAnalysisEngine()
+
+
 def run_chat(
     session: Session,
     conversation_id: str,
     question: str,
-    engine: OfflineAnalysisEngine | None = None,
+    engine: object | None = None,
 ) -> dict[str, Any] | None:
     previous = _load_context(session, conversation_id)
     if previous is None:
@@ -130,12 +143,22 @@ def run_chat(
 
     inherited_context = any(value is not None for value in previous.model_dump().values())
     context = merge_context(previous, question)
-    plan = (engine or OfflineAnalysisEngine()).analyze(question, context)
+    plan = (engine or select_analysis_engine(session)).analyze(question, context)
     datasets: list[dict[str, Any]] = []
     if not plan.needs_clarification:
         target_engine = session.get_bind()
         for query in plan.queries:
-            safe_sql = validate_read_only_sql(query.sql, ALLOWED_TABLES)
+            try:
+                safe_sql = validate_read_only_sql(query.sql, ALLOWED_TABLES)
+            except SqlSafetyError as exc:
+                plan.metadata["sql_validation_status"] = "rejected"
+                raise ApiError(
+                    422,
+                    "SQL_REJECTED",
+                    f"模型生成的 SQL 未通过安全校验，已阻止执行：{exc}",
+                    "请修改问题后重试，或切换 LLM_MODE=offline",
+                ) from exc
+            plan.metadata["sql_validation_status"] = "passed"
             rows = execute_read_only(
                 target_engine, safe_sql, get_settings().query_row_limit
             )

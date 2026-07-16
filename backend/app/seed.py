@@ -143,6 +143,18 @@ SCHEMA_STATEMENTS = (
         FOREIGN KEY (dashboard_id) REFERENCES dashboards(id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS analysis_feedback (
+        id TEXT PRIMARY KEY,
+        analysis_id TEXT NOT NULL,
+        rating TEXT NOT NULL,
+        comment TEXT NOT NULL,
+        save_as_example INTEGER NOT NULL,
+        saved_knowledge_id TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (analysis_id) REFERENCES analysis_runs(id)
+    )
+    """,
 )
 
 

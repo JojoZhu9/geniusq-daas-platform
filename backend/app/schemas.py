@@ -49,3 +49,24 @@ class AnalysisEngine(Protocol):
 class ChatRequest(BaseModel):
     conversation_id: str
     question: str = Field(min_length=1, max_length=500)
+
+
+class RetrievedKnowledge(BaseModel):
+    id: str
+    title: str
+    kind: str
+    scope: str
+    content: str
+    linked_tables: List[str]
+    score: float
+
+
+class TextToSqlResult(BaseModel):
+    sql: str = ""
+    reasoning: str = ""
+    chart: Optional[ChartSpec] = None
+    confidence: Optional[float] = None
+    used_knowledge_ids: List[str] = Field(default_factory=list)
+    raw_model_output: Optional[dict[str, Any]] = None
+    needs_clarification: bool = False
+    suggestions: List[str] = Field(default_factory=list)

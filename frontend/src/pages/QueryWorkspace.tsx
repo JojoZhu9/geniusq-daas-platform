@@ -92,6 +92,15 @@ export function QueryWorkspace() {
     setNotice(`已加入“${dashboard.name}”`);
   }
 
+  async function saveFeedback(analysisId: string, saveAsExample = false) {
+    await api.post(`/api/analysis/${analysisId}/feedback`, {
+      rating: "correct",
+      comment: saveAsExample ? "SQL 正确，可作为示例" : "SQL 正确",
+      save_as_example: saveAsExample
+    });
+    setNotice(saveAsExample ? "反馈已保存，并已收藏为 SQL 示例" : "反馈已保存");
+  }
+
   const error = askMutation.error instanceof ApiClientError
     ? `${askMutation.error.message}；${askMutation.error.payload.action}`
     : askMutation.error ? "分析失败，请稍后重试。" : "";
@@ -140,6 +149,37 @@ export function QueryWorkspace() {
                         <button className="text-button" type="button" onClick={() => setExpanded((value) => !value)}>{expanded ? "收起思考过程" : "查看思考过程"}</button>
                       </div>
                       {expanded && <ThinkingTimeline steps={exchange.response.steps} />}
+                      {exchange.response.metadata.mode === "deepseek" && (
+                        <section className="model-evidence-card" aria-label="模型生成依据">
+                          <div>
+                            <small>当前模式</small>
+                            <strong>DeepSeek Text-to-SQL</strong>
+                            <span>{exchange.response.metadata.model ?? "deepseek-chat"}</span>
+                          </div>
+                          <div>
+                            <small>SQL 校验</small>
+                            <strong>
+                              SQL 校验：{exchange.response.metadata.sql_validation_status === "passed" ? "通过" : "待校验"}
+                            </strong>
+                            {typeof exchange.response.metadata.confidence === "number" && (
+                              <span>模型置信度：{Math.round(exchange.response.metadata.confidence * 100)}%</span>
+                            )}
+                          </div>
+                          {exchange.response.metadata.model_reasoning && (
+                            <p>{String(exchange.response.metadata.model_reasoning)}</p>
+                          )}
+                          {!!exchange.response.metadata.used_knowledge?.length && (
+                            <div className="knowledge-chips" aria-label="使用知识">
+                              {exchange.response.metadata.used_knowledge.map((item) => (
+                                <span key={item.id}>
+                                  {item.title}
+                                  <small>{item.scope === "private" ? "私有" : "公开"} · {item.kind}</small>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </section>
+                      )}
                       <div className="insight-grid">
                         {exchange.response.insights.slice(0, 3).map((insight, index) => (
                           <article key={insight}><span>{index === 0 ? "MAX" : index === 1 ? "TREND" : "NOTE"}</span><p>{insight}</p></article>
@@ -160,6 +200,8 @@ export function QueryWorkspace() {
                       )}
                       <div className="result-actions">
                         <button type="button" className="primary-button" onClick={saveToDashboard}><span aria-hidden="true">＋ </span>加入仪表盘</button>
+                        <button type="button" className="secondary-button" onClick={() => saveFeedback(exchange.response.analysis_id)}>SQL 正确</button>
+                        <button type="button" className="secondary-button" onClick={() => saveFeedback(exchange.response.analysis_id, true)}>收藏为示例</button>
                         <span className="result-meta">耗时 &lt; 1 秒 · {exchange.response.datasets.reduce((sum, dataset) => sum + dataset.rows.length, 0)} 条记录</span>
                       </div>
                       <div className="follow-ups"><strong>继续追问</strong>{exchange.response.follow_ups.map((item) => <button type="button" key={item} onClick={() => ask(item)}>{item}</button>)}</div>

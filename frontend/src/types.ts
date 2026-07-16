@@ -41,7 +41,22 @@ export type AnalysisResponse = {
   insights: string[];
   follow_ups: string[];
   requirement_ids: string[];
-  metadata: Record<string, string>;
+  metadata: {
+    mode?: string;
+    model?: string;
+    model_reasoning?: string;
+    confidence?: number | null;
+    sql_validation_status?: string;
+    used_knowledge?: {
+      id: string;
+      title: string;
+      kind: string;
+      scope: string;
+      linked_tables: string[];
+      score: number;
+    }[];
+    [key: string]: unknown;
+  };
   created_at: string;
 };
 

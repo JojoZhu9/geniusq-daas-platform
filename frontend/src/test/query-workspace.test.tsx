@@ -123,3 +123,67 @@ test("expands auditable steps and saves the chart to a dashboard", async () => {
   expect(payload.chart.type).toBe("line");
   expect(payload.layout).toEqual({ x: 6, y: 0, w: 6, h: 4 });
 });
+
+test("shows deepseek metadata and saves positive feedback", async () => {
+  const deepseekAnalysis = {
+    ...completedAnalysis,
+    analysis_id: "a-deepseek",
+    metadata: {
+      mode: "deepseek",
+      model: "deepseek-chat",
+      model_reasoning: "使用房价月度表生成趋势查询",
+      confidence: 0.81,
+      sql_validation_status: "passed",
+      used_knowledge: [
+        {
+          id: "knowledge-private-house-price",
+          title: "行政区房价口径",
+          kind: "text",
+          scope: "private",
+          linked_tables: ["house_price_monthly"],
+          score: 21.5
+        }
+      ]
+    }
+  };
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations") return json({ id: "c1" }, 201);
+    if (path === "/api/chat") return json(deepseekAnalysis);
+    if (path === "/api/analysis/a-deepseek/feedback") return json({
+      id: "feedback-1",
+      analysis_id: "a-deepseek",
+      rating: "correct",
+      comment: "SQL 正确",
+      save_as_example: false,
+      saved_knowledge_id: null,
+      created_at: "2026-07-16T00:00:00Z"
+    }, 201);
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace();
+  const input = await screen.findByPlaceholderText("请输入想分析的问题");
+  await userEvent.type(input, "分析2025年各区平均房价");
+  await userEvent.click(screen.getByRole("button", { name: "发送" }));
+
+  expect(await screen.findByText("DeepSeek Text-to-SQL")).toBeVisible();
+  expect(screen.getByText("行政区房价口径")).toBeVisible();
+  expect(screen.getByText("使用房价月度表生成趋势查询")).toBeVisible();
+  expect(screen.getByText("SQL 校验：通过")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "SQL 正确" }));
+
+  expect(await screen.findByText("反馈已保存")).toBeVisible();
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/analysis/a-deepseek/feedback",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        rating: "correct",
+        comment: "SQL 正确",
+        save_as_example: false
+      })
+    })
+  );
+});

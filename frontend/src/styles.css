@@ -100,6 +100,15 @@ button { border: 0; }
 .result-topline strong { color: #263b50; font-size: 13px; }
 .result-topline small { color: #8a98a8; }
 .success-icon { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; background: #29b97d; font-size: 11px; }
+.model-evidence-card { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 14px 14px 0; padding: 12px; border: 1px solid #cfe4f7; border-radius: 6px; background: linear-gradient(145deg, #f4faff, #ffffff); }
+.model-evidence-card > div:not(.knowledge-chips) { display: grid; gap: 3px; }
+.model-evidence-card small { color: #8394a7; font-size: 9px; }
+.model-evidence-card strong { color: #245174; font-size: 12px; }
+.model-evidence-card span { color: #65798e; font-size: 10px; }
+.model-evidence-card > p { grid-column: 1 / -1; margin: 2px 0; color: #435b73; font-size: 11px; line-height: 1.55; }
+.knowledge-chips { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.knowledge-chips > span { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #d8e7f4; border-radius: 999px; color: #27618e; background: #fff; font-size: 10px; }
+.knowledge-chips small { color: #7e8fa1; }
 .thinking-timeline { margin: 0; padding: 12px 14px 2px; list-style: none; background: #f8fafc; }
 .thinking-timeline li { position: relative; display: grid; grid-template-columns: 25px minmax(0, 1fr) auto; gap: 9px; padding-bottom: 13px; }
 .thinking-timeline li:not(:last-child)::after { content: ""; position: absolute; left: 11px; top: 23px; bottom: 1px; width: 1px; background: #cdd9e5; }

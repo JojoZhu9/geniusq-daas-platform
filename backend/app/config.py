@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com/v1"
+    deepseek_model: str = "deepseek-chat"
+    deepseek_timeout_seconds: int = 30
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

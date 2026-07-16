@@ -5,6 +5,7 @@ from app.db import get_session
 from app.errors import ApiError
 from app.schemas import ChatRequest
 from app.services.conversation import create_conversation, get_analysis, run_chat
+from app.services.feedback import save_analysis_feedback
 
 
 router = APIRouter()
@@ -41,3 +42,10 @@ def analysis(analysis_id: str, session: Session = Depends(get_session)):
             "请重新提交问题",
         )
     return response
+
+
+@router.post("/analysis/{analysis_id}/feedback", status_code=201)
+def analysis_feedback(
+    analysis_id: str, payload: dict, session: Session = Depends(get_session)
+):
+    return save_analysis_feedback(session, analysis_id, payload)

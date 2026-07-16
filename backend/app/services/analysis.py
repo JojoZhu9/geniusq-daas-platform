@@ -1,5 +1,8 @@
 import re
+from sqlalchemy.orm import Session
 
+from app.config import Settings
+from app.errors import ApiError
 from app.schemas import (
     AnalysisPlan,
     AnalysisStep,
@@ -7,6 +10,8 @@ from app.schemas import (
     PlannedQuery,
     QueryContext,
 )
+from app.services.retrieval import retrieve_relevant_knowledge
+from app.services.text_to_sql import DeepSeekTextToSqlService
 
 
 class OfflineAnalysisEngine:
@@ -185,4 +190,97 @@ class OfflineAnalysisEngine:
                 "2.1-a", "2.1-b", "2.1-c", "2.4-a", "2.4-b", "2.5", "5"
             ],
             metadata={"mode": "offline", "intent": "cross_source_correlation"},
+        )
+
+
+class DeepSeekAnalysisEngine:
+    """Build analysis plans with retrieved knowledge and DeepSeek Text-to-SQL."""
+
+    def __init__(self, session: Session, settings: Settings) -> None:
+        if not settings.deepseek_api_key:
+            raise ApiError(
+                503,
+                "DEEPSEEK_API_KEY_MISSING",
+                "DeepSeek API Key 未配置",
+                "请在 .env 中配置 DEEPSEEK_API_KEY，或切换 LLM_MODE=offline",
+            )
+        self.session = session
+        self.settings = settings
+        self.service = DeepSeekTextToSqlService(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
+            model=settings.deepseek_model,
+            timeout_seconds=settings.deepseek_timeout_seconds,
+        )
+
+    def analyze(self, question: str, context: QueryContext) -> AnalysisPlan:
+        knowledge = retrieve_relevant_knowledge(self.session, question)
+        result = self.service.generate(question, context, knowledge)
+        used_knowledge = [
+            {
+                "id": item.id,
+                "title": item.title,
+                "kind": item.kind,
+                "scope": item.scope,
+                "linked_tables": item.linked_tables,
+                "score": item.score,
+            }
+            for item in knowledge
+            if item.id in result.used_knowledge_ids
+        ]
+        if result.needs_clarification:
+            return AnalysisPlan(
+                needs_clarification=True,
+                suggestions=result.suggestions,
+                steps=[
+                    AnalysisStep(
+                        key="deepseek_clarification",
+                        title="DeepSeek 判断需要补充信息",
+                        detail=result.reasoning or "模型认为当前问题缺少必要分析条件。",
+                    )
+                ],
+                insights=[result.reasoning] if result.reasoning else [],
+                metadata={
+                    "mode": "deepseek",
+                    "model": self.settings.deepseek_model,
+                    "used_knowledge": used_knowledge,
+                    "model_reasoning": result.reasoning,
+                    "confidence": result.confidence,
+                    "sql_validation_status": "not_run",
+                },
+            )
+        return AnalysisPlan(
+            steps=[
+                AnalysisStep(
+                    key="retrieve_knowledge",
+                    title="检索问数知识",
+                    detail=f"已检索到 {len(used_knowledge)} 条相关知识用于生成 SQL。",
+                ),
+                AnalysisStep(
+                    key="deepseek_text_to_sql",
+                    title="调用 DeepSeek 生成 SQL",
+                    detail=result.reasoning or "模型已返回候选 SQL 和图表建议。",
+                ),
+                AnalysisStep(
+                    key="validate_sql",
+                    title="校验只读 SQL",
+                    detail="候选 SQL 将继续经过授权表、单语句和只读规则校验。",
+                ),
+            ],
+            queries=[PlannedQuery(source="DeepSeek Text-to-SQL", sql=result.sql)],
+            chart=result.chart,
+            insights=[result.reasoning] if result.reasoning else [],
+            follow_ups=[
+                "改成柱状图",
+                "只看朝阳区和海淀区",
+                "把当前 SQL 收藏为示例",
+            ],
+            metadata={
+                "mode": "deepseek",
+                "model": self.settings.deepseek_model,
+                "used_knowledge": used_knowledge,
+                "model_reasoning": result.reasoning,
+                "confidence": result.confidence,
+                "sql_validation_status": "pending",
+            },
         )
