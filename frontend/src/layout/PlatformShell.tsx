@@ -1,22 +1,43 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { api } from "../api/client";
 
 const workspaceLinks = [
   { to: "/query", icon: "✦", label: "智能问数" },
   { to: "/knowledge", icon: "▤", label: "知识库管理" },
-  { to: "/dashboards", icon: "▦", label: "我的仪表盘" },
-  { to: "/requirements", icon: "✓", label: "需求映射" }
+  { to: "/dashboards", icon: "▦", label: "我的仪表盘" }
 ];
 
+type ModelSettings = {
+  llm_mode: string;
+  deepseek_api_key_configured: boolean;
+};
+
+function modeText(settings: ModelSettings | null) {
+  if (!settings) return "模型模式检测中";
+  if (settings.llm_mode === "deepseek") {
+    return settings.deepseek_api_key_configured
+      ? "LLM_MODE=deepseek"
+      : "LLM_MODE=deepseek（未配置 Key）";
+  }
+  return `LLM_MODE=${settings.llm_mode || "offline"}`;
+}
+
 export function PlatformShell() {
+  const [settings, setSettings] = useState<ModelSettings | null>(null);
+
+  useEffect(() => {
+    api.get<ModelSettings>("/api/model-settings")
+      .then(setSettings)
+      .catch(() => setSettings({ llm_mode: "offline", deepseek_api_key_configured: false }));
+  }, []);
+
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-mark"><span>G</span><strong>GeniusQ DaaS</strong></div>
         <nav className="product-nav" aria-label="平台模块">
-          <span>数据建模</span>
-          <span>数据呈现</span>
           <span className="is-active">智慧问数</span>
-          <span>数据管理</span>
         </nav>
         <div className="topbar-actions">
           <span className="status-dot" /> 离线演示
@@ -36,7 +57,7 @@ export function PlatformShell() {
           </nav>
           <div className="sidebar-footer">
             <small>模型模式</small>
-            <strong>LLM_MODE=offline</strong>
+            <strong>{modeText(settings)}</strong>
           </div>
         </aside>
         <div className="page-canvas">
