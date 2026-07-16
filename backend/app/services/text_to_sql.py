@@ -82,6 +82,9 @@ class DeepSeekTextToSqlService:
             "你是企业数据平台的 Text-to-SQL 助手。只返回 JSON。"
             "SQL 必须是 SQLite 单条 SELECT 或 WITH 查询；只能使用提供的表和字段；"
             "不允许 INSERT、UPDATE、DELETE、DROP、ALTER、CREATE。"
+            "如果用户问题已经包含年份、指标、表名、字段名或明确分析对象，请直接生成 SQL，"
+            "不要因为缺少展示偏好、排序方式或图表细节而要求澄清。"
+            "只有在缺少可查询指标或无法判断任何可用数据表时，才返回 needs_clarification=true。"
             "JSON 示例："
             '{"needs_clarification":false,"suggestions":[],"sql":"SELECT ...",'
             '"reasoning":"...","chart_suggestion":{"type":"line","x_field":"month",'

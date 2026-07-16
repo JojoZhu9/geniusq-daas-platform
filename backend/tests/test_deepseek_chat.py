@@ -16,7 +16,7 @@ def _deepseek_env(monkeypatch, api_key="test-key"):
     if api_key:
         monkeypatch.setenv("DEEPSEEK_API_KEY", api_key)
     else:
-        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        monkeypatch.setenv("DEEPSEEK_API_KEY", "")
     monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
     monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
     get_settings.cache_clear()
