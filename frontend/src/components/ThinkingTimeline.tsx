@@ -10,7 +10,9 @@ export function ThinkingTimeline({ steps }: { steps: AnalysisStep[] }) {
             <strong>{step.title}</strong>
             <p>{step.detail}</p>
           </div>
-          <span className={`step-status ${step.status}`}>{step.status === "completed" ? "已完成" : step.status}</span>
+          <span className={`step-status ${step.status}`}>
+            {step.status === "completed" ? "已完成" : step.status === "running" ? "运行中" : step.status}
+          </span>
         </li>
       ))}
     </ol>

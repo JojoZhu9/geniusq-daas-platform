@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api, ApiClientError } from "../api/client";
 import { AnalysisChart } from "../components/AnalysisChart";
@@ -8,6 +8,23 @@ import { ThinkingTimeline } from "../components/ThinkingTimeline";
 import type { AnalysisResponse, ChartSpec, Dashboard } from "../types";
 
 type Exchange = { question: string; response: AnalysisResponse };
+
+const LIVE_STEPS = [
+  { key: "understand_question", title: "理解用户问题", detail: "正在识别用户意图、时间范围、区域和指标…" },
+  { key: "merge_context", title: "合并会话上下文", detail: "正在读取历史对话，合并上一轮年份、区域和指标…" },
+  { key: "retrieve_knowledge", title: "检索问数知识", detail: "正在从知识库中检索表结构、业务口径和 SQL 示例…" },
+  { key: "select_tables_fields", title: "选择数据表与字段", detail: "正在匹配可用数据表和字段，并确认查询边界…" },
+  { key: "deepseek_text_to_sql", title: "调用 DeepSeek 生成 SQL", detail: "正在把问题、上下文和知识片段发送给模型生成候选 SQL…" },
+  { key: "validate_sql", title: "校验只读 SQL", detail: "正在检查 SQL 是否只读、单语句、且只访问授权表…" },
+  { key: "execute_and_visualize", title: "执行查询并生成图表建议", detail: "正在查询本地 SQLite，并准备图表和洞察结果…" },
+] as const;
+
+function liveThinkingSteps(activeIndex: number) {
+  return LIVE_STEPS.map((step, index) => ({
+    ...step,
+    status: index < activeIndex ? "completed" : index === activeIndex ? "running" : "pending"
+  } as const));
+}
 
 function nextDashboardCardLayout(cards: Dashboard["cards"]) {
   const width = 6;
@@ -33,10 +50,14 @@ export function QueryWorkspace() {
   const [question, setQuestion] = useState("");
   const [history, setHistory] = useState<Exchange[]>([]);
   const [expanded, setExpanded] = useState(false);
+  const [thinkingCollapsed, setThinkingCollapsed] = useState(false);
+  const [pendingQuestion, setPendingQuestion] = useState("");
+  const [liveStepIndex, setLiveStepIndex] = useState(0);
   const [notice, setNotice] = useState("");
   const [initError, setInitError] = useState("");
   const [chartTypes, setChartTypes] = useState<Record<string, ChartSpec["type"]>>({});
   const latest = history.at(-1)?.response;
+  const liveSteps = useMemo(() => liveThinkingSteps(liveStepIndex), [liveStepIndex]);
 
   useEffect(() => {
     api.post<{ id: string }>("/api/conversations")
@@ -51,15 +72,31 @@ export function QueryWorkspace() {
     }),
     onSuccess: (response, askedQuestion) => {
       setHistory((items) => [...items, { question: askedQuestion, response }]);
-      setExpanded(false);
+      setExpanded(true);
+      setThinkingCollapsed(false);
+      setPendingQuestion("");
       setNotice("");
     }
   });
+
+  useEffect(() => {
+    if (!askMutation.isPending) {
+      setLiveStepIndex(0);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setLiveStepIndex((index) => Math.min(index + 1, LIVE_STEPS.length - 1));
+    }, 650);
+    return () => window.clearInterval(timer);
+  }, [askMutation.isPending]);
 
   function ask(nextQuestion: string) {
     const trimmed = nextQuestion.trim();
     if (!trimmed || !conversationId || askMutation.isPending) return;
     setQuestion("");
+    setPendingQuestion(trimmed);
+    setThinkingCollapsed(false);
+    setLiveStepIndex(0);
     askMutation.mutate(trimmed);
   }
 
@@ -213,7 +250,20 @@ export function QueryWorkspace() {
                 </div>
               </article>
             ))}
-            {askMutation.isPending && <div className="analysis-progress"><span className="spinner" /><div><strong>正在生成可审计分析计划</strong><p>识别意图 → 选择数据 → 校验 SQL → 汇总结果</p></div></div>}
+            {askMutation.isPending && (
+              <article className="exchange live-exchange">
+                <div className="user-message"><span>你</span><p>{pendingQuestion}</p></div>
+                <div className="assistant-message">
+                  <div className="completed-result live-thinking">
+                    <div className="result-topline">
+                      <div><span className="spinner small-spinner" /><strong>正在分析</strong><small>DeepSeek Text-to-SQL</small></div>
+                      <button className="text-button" type="button" onClick={() => setThinkingCollapsed((value) => !value)}>{thinkingCollapsed ? "展开思考过程" : "折叠思考过程"}</button>
+                    </div>
+                    {!thinkingCollapsed && <ThinkingTimeline steps={liveSteps} />}
+                  </div>
+                </div>
+              </article>
+            )}
           </div>
 
           {(notice || error || initError) && <div className={error || initError ? "inline-alert error" : "inline-alert"}>{error || initError || notice}</div>}

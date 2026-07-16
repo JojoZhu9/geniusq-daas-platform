@@ -124,6 +124,80 @@ def _result_insights(plan: AnalysisPlan, datasets: list[dict[str, Any]]) -> list
     return insights
 
 
+def _used_questions_and_recommendations(session: Session, conversation_id: str) -> set[str]:
+    used = {
+        row["content"].strip()
+        for row in session.execute(
+            text(
+                "SELECT content FROM messages "
+                "WHERE conversation_id = :conversation_id AND role = 'user'"
+            ),
+            {"conversation_id": conversation_id},
+        ).mappings()
+        if row["content"].strip()
+    }
+    rows = session.execute(
+        text(
+            "SELECT response_json FROM analysis_runs "
+            "WHERE conversation_id = :conversation_id"
+        ),
+        {"conversation_id": conversation_id},
+    ).mappings()
+    for row in rows:
+        try:
+            response = json.loads(row["response_json"])
+        except json.JSONDecodeError:
+            continue
+        used.update(item.strip() for item in response.get("suggestions", []) if item.strip())
+        used.update(item.strip() for item in response.get("follow_ups", []) if item.strip())
+    return used
+
+
+def _recommendation_pool(context: QueryContext) -> list[str]:
+    year = context.year_from or context.year_to or 2025
+    district = context.district
+    if district:
+        return [
+            f"对比{district}和全市其他区的{year}年房价趋势",
+            f"继续分析{district}{year}年房价与成交量的关系",
+            f"查看{district}{year}年同比涨幅最高的月份",
+            f"分析{district}{year}年成交套数变化",
+            f"对比{district}{year}年房价环比和同比变化",
+            f"把{district}{year}年房价趋势保存到仪表盘",
+        ]
+    return [
+        f"分析{year}年各区房价趋势",
+        f"对比{year - 1}年和{year}年各区房价涨幅",
+        f"分析{year}年房价与成交量的关系",
+        f"只看海淀区和朝阳区的{year}年房价趋势",
+        f"查看{year}年同比涨幅最高的区域",
+        f"分析{year}年房价与人口增长的关系",
+        f"分析{year}年房价与通勤时间的关系",
+        f"把{year}年各区房价趋势保存到仪表盘",
+    ]
+
+
+def _dedupe_recommendations(
+    primary: list[str],
+    used: set[str],
+    context: QueryContext,
+    current_question: str,
+) -> list[str]:
+    blocked = {current_question.strip(), *used}
+    result: list[str] = []
+    for item in [*primary, *_recommendation_pool(context)]:
+        if item and item not in blocked and item not in result:
+            result.append(item)
+        if len(result) == 3:
+            return result
+    year = context.year_from or context.year_to or 2025
+    while len(result) < 3:
+        fallback = f"继续探索{year}年房价分析方向 {len(result) + 1}"
+        if fallback not in blocked:
+            result.append(fallback)
+    return result
+
+
 def select_analysis_engine(session: Session):
     settings = get_settings()
     if settings.llm_mode == "deepseek":
@@ -144,6 +218,15 @@ def run_chat(
     inherited_context = any(value is not None for value in previous.model_dump().values())
     context = merge_context(previous, question)
     plan = (engine or select_analysis_engine(session)).analyze(question, context)
+    used_recommendations = _used_questions_and_recommendations(session, conversation_id)
+    if plan.needs_clarification:
+        plan.suggestions = _dedupe_recommendations(
+            plan.suggestions, used_recommendations, context, question
+        )
+    else:
+        plan.follow_ups = _dedupe_recommendations(
+            plan.follow_ups, used_recommendations, context, question
+        )
     datasets: list[dict[str, Any]] = []
     if not plan.needs_clarification:
         target_engine = session.get_bind()

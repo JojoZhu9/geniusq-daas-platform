@@ -107,7 +107,7 @@ test("expands auditable steps and saves the chart to a dashboard", async () => {
   await userEvent.type(input, "分析2025年各区平均房价");
   await userEvent.click(screen.getByRole("button", { name: "发送" }));
 
-  await userEvent.click(await screen.findByRole("button", { name: "查看思考过程" }));
+  expect(await screen.findByRole("button", { name: "收起思考过程" })).toBeVisible();
   expect(screen.getByText("选择数据表与字段")).toBeVisible();
   expect(screen.getAllByText("house_price_monthly").length).toBeGreaterThan(0);
   await userEvent.click(screen.getByRole("button", { name: "折线" }));

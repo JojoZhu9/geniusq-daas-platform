@@ -117,6 +117,29 @@ def test_deepseek_mode_simple_question_returns_three_recommendations_without_mod
     ]
 
 
+def test_deepseek_mode_repeated_simple_questions_do_not_repeat_recommendations(client, monkeypatch):
+    _deepseek_env(monkeypatch)
+
+    def fail_generate(self, question, context, knowledge):
+        raise AssertionError("simple questions should not call DeepSeek")
+
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "generate", fail_generate)
+    conversation_id = client.post("/api/conversations").json()["id"]
+
+    first = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "房价"},
+    ).json()
+    second = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "房价"},
+    ).json()
+
+    assert len(first["suggestions"]) == 3
+    assert len(second["suggestions"]) == 3
+    assert set(first["suggestions"]).isdisjoint(second["suggestions"])
+
+
 def test_deepseek_mode_rejects_dangerous_sql(client, monkeypatch):
     _deepseek_env(monkeypatch)
 

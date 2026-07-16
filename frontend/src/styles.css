@@ -116,6 +116,8 @@ button { border: 0; }
 .thinking-timeline strong { color: #31475d; font-size: 12px; }
 .thinking-timeline p { margin: 3px 0 0; color: #758497; font-size: 11px; }
 .step-status { color: #29986c; font-size: 10px; }
+.step-status.running { color: #0878df; }
+.step-status.pending { color: #8a98a8; }
 .insight-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 14px; }
 .insight-grid article { min-height: 82px; padding: 10px; border: 1px solid #e2e8ef; border-radius: 5px; background: linear-gradient(145deg, #fff, #f8fbfe); }
 .insight-grid span { color: #1680df; font-size: 9px; font-weight: 800; letter-spacing: .7px; }
@@ -149,6 +151,7 @@ button { border: 0; }
 .analysis-progress strong { font-size: 12px; }
 .analysis-progress p { margin: 3px 0 0; color: #74869a; font-size: 10px; }
 .spinner { width: 23px; height: 23px; border: 2px solid #bddcf6; border-top-color: #0878df; border-radius: 50%; animation: spin .8s linear infinite; }
+.small-spinner { width: 20px; height: 20px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .inline-alert { margin: 8px 0; padding: 9px 11px; border-radius: 4px; color: #16744f; background: #eaf8f2; font-size: 11px; }
 .inline-alert.error { color: #a53838; background: #fff0f0; }
