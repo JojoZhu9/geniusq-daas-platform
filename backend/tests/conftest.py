@@ -6,8 +6,18 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_engine, get_session, init_database
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def default_offline_mode(monkeypatch):
+    monkeypatch.setenv("LLM_MODE", "offline")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture

@@ -73,6 +73,48 @@ def test_deepseek_mode_executes_safe_generated_sql(client, monkeypatch):
     assert body["metadata"]["sql_validation_status"] == "passed"
     assert body["metadata"]["used_knowledge"][0]["id"] == "knowledge-private-house-price"
     assert body["datasets"][0]["rows"]
+    assert [step["title"] for step in body["steps"]] == [
+        "理解用户问题",
+        "合并会话上下文",
+        "检索问数知识",
+        "选择数据表与字段",
+        "调用 DeepSeek 生成 SQL",
+        "校验只读 SQL",
+        "执行查询并生成图表建议",
+    ]
+    assert len(body["follow_ups"]) == 3
+    assert body["follow_ups"] == [
+        "只看海淀区和朝阳区的2025年房价趋势",
+        "继续分析2025年房价与成交量的关系",
+        "把2025年各区房价趋势保存到仪表盘",
+    ]
+
+
+def test_deepseek_mode_simple_question_returns_three_recommendations_without_model_call(client, monkeypatch):
+    _deepseek_env(monkeypatch)
+
+    def fail_generate(self, question, context, knowledge):
+        raise AssertionError("simple questions should not call DeepSeek")
+
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "generate", fail_generate)
+    conversation_id = client.post("/api/conversations").json()["id"]
+
+    response = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "房价"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "needs_clarification"
+    assert body["metadata"]["intent"] == "simple_question_recommendation"
+    assert body["queries"] == []
+    assert len(body["suggestions"]) == 3
+    assert body["suggestions"] == [
+        "分析2025年各区房价趋势",
+        "对比2024年和2025年各区房价涨幅",
+        "分析2025年房价与成交量的关系",
+    ]
 
 
 def test_deepseek_mode_rejects_dangerous_sql(client, monkeypatch):

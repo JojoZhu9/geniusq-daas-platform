@@ -214,6 +214,8 @@ class DeepSeekAnalysisEngine:
         )
 
     def analyze(self, question: str, context: QueryContext) -> AnalysisPlan:
+        if self._is_simple_question(question, context):
+            return self._simple_question_plan()
         knowledge = retrieve_relevant_knowledge(self.session, question)
         result = self.service.generate(question, context, knowledge)
         used_knowledge = [
@@ -252,29 +254,56 @@ class DeepSeekAnalysisEngine:
         return AnalysisPlan(
             steps=[
                 AnalysisStep(
+                    key="understand_question",
+                    title="理解用户问题",
+                    detail=(
+                        f"识别到用户问题为“{question}”，当前上下文为"
+                        f"年份 {context.year_from or context.year_to or '未指定'}、"
+                        f"区域 {context.district or '各区/全市'}、"
+                        f"指标 {context.metric or '待模型判断'}。"
+                    ),
+                ),
+                AnalysisStep(
+                    key="merge_context",
+                    title="合并会话上下文",
+                    detail="读取同一会话中的历史年份、区域和指标；本轮显式输入会覆盖历史条件。",
+                ),
+                AnalysisStep(
                     key="retrieve_knowledge",
                     title="检索问数知识",
-                    detail=f"已检索到 {len(used_knowledge)} 条相关知识用于生成 SQL。",
+                    detail=(
+                        f"从知识库中检索到 {len(used_knowledge)} 条相关知识，"
+                        "优先使用私有口径、SQL 示例和可用数据表说明。"
+                    ),
+                ),
+                AnalysisStep(
+                    key="select_tables_fields",
+                    title="选择数据表与字段",
+                    detail=(
+                        "根据问题和知识匹配授权表字段，例如 house_price_monthly 的 "
+                        "month、district、avg_price、mom_change、yoy_change。"
+                    ),
                 ),
                 AnalysisStep(
                     key="deepseek_text_to_sql",
                     title="调用 DeepSeek 生成 SQL",
-                    detail=result.reasoning or "模型已返回候选 SQL 和图表建议。",
+                    detail=result.reasoning or "将问题、上下文、表结构和知识片段发送给 DeepSeek，要求返回结构化 JSON。",
                 ),
                 AnalysisStep(
                     key="validate_sql",
                     title="校验只读 SQL",
                     detail="候选 SQL 将继续经过授权表、单语句和只读规则校验。",
                 ),
+                AnalysisStep(
+                    key="execute_and_visualize",
+                    title="执行查询并生成图表建议",
+                    detail="SQL 校验通过后查询本地 SQLite，并使用模型返回的图表建议渲染折线、柱状或表格。",
+                ),
             ],
             queries=[PlannedQuery(source="DeepSeek Text-to-SQL", sql=result.sql)],
             chart=result.chart,
             insights=[result.reasoning] if result.reasoning else [],
-            follow_ups=[
-                "改成柱状图",
-                "只看朝阳区和海淀区",
-                "把当前 SQL 收藏为示例",
-            ],
+            follow_ups=self._follow_ups(context),
             metadata={
                 "mode": "deepseek",
                 "model": self.settings.deepseek_model,
@@ -284,3 +313,65 @@ class DeepSeekAnalysisEngine:
                 "sql_validation_status": "pending",
             },
         )
+
+    @staticmethod
+    def _is_simple_question(question: str, context: QueryContext) -> bool:
+        normalized = question.strip()
+        if any(term in normalized for term in ("删除", "修改", "更新", "写入", "清空", "drop", "delete", "update")):
+            return False
+        has_year = re.search(r"20\d{2}", normalized) is not None
+        if len(normalized) <= 4 and any(term in normalized for term in ("房价", "均价", "成交", "人口", "通勤", "数据")):
+            return True
+        if normalized in {"分析", "看一下", "查一下", "帮我分析", "问数"}:
+            return True
+        return (
+            any(term in normalized for term in ("房价", "均价"))
+            and not has_year
+            and context.year_from is None
+            and context.year_to is None
+        )
+
+    @staticmethod
+    def _simple_question_plan() -> AnalysisPlan:
+        return AnalysisPlan(
+            needs_clarification=True,
+            suggestions=[
+                "分析2025年各区房价趋势",
+                "对比2024年和2025年各区房价涨幅",
+                "分析2025年房价与成交量的关系",
+            ],
+            steps=[
+                AnalysisStep(
+                    key="detect_simple_question",
+                    title="识别简单问题",
+                    detail="当前问题缺少时间范围、分析对象或指标口径，先不调用模型生成 SQL。",
+                ),
+                AnalysisStep(
+                    key="recommend_questions",
+                    title="推荐可问问题",
+                    detail="基于房价、成交量和趋势分析场景，生成 3 个可直接点击的推荐问题。",
+                ),
+            ],
+            insights=["当前问题较简单，建议先选择一个明确的分析问题。"],
+            requirement_ids=["2.2"],
+            metadata={
+                "mode": "deepseek",
+                "intent": "simple_question_recommendation",
+                "sql_validation_status": "not_run",
+            },
+        )
+
+    @staticmethod
+    def _follow_ups(context: QueryContext) -> list[str]:
+        year = context.year_from or context.year_to or 2025
+        if context.district:
+            return [
+                f"对比{context.district}和全市其他区的{year}年房价趋势",
+                f"继续分析{context.district}{year}年房价与成交量的关系",
+                f"查看{context.district}{year}年同比涨幅最高的月份",
+            ]
+        return [
+            f"只看海淀区和朝阳区的{year}年房价趋势",
+            f"继续分析{year}年房价与成交量的关系",
+            f"把{year}年各区房价趋势保存到仪表盘",
+        ]
