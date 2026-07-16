@@ -128,6 +128,98 @@ def test_deepseek_mode_repairs_irrelevant_or_invalid_chart_fields(client, monkey
     assert body["metadata"]["chart_validation_status"] == "repaired"
 
 
+def test_deepseek_mode_repairs_sql_after_execution_error(client, monkeypatch):
+    _deepseek_env(monkeypatch)
+
+    def fake_generate(self, question, context, knowledge):
+        return TextToSqlResult(
+            sql=(
+                "SELECT month, district, bad_price FROM house_price_monthly "
+                "WHERE month LIKE '2025-%' ORDER BY month, district"
+            ),
+            reasoning="第一次误用了不存在的 bad_price 字段。",
+            chart=ChartSpec(type="line", x_field="month", y_fields=["bad_price"], title="错误图表"),
+            confidence=0.62,
+            used_knowledge_ids=[item.id for item in knowledge],
+        )
+
+    def fake_repair(self, question, context, knowledge, failed_sql, error_message, repair_reason):
+        assert repair_reason == "execution_error"
+        assert "bad_price" in failed_sql
+        return TextToSqlResult(
+            sql=(
+                "SELECT month, district, avg_price FROM house_price_monthly "
+                "WHERE month LIKE '2025-%' ORDER BY month, district"
+            ),
+            reasoning="已将不存在的 bad_price 修正为 avg_price。",
+            chart=ChartSpec(type="line", x_field="month", y_fields=["avg_price"], title="修复后的房价趋势"),
+            confidence=0.88,
+            used_knowledge_ids=[item.id for item in knowledge],
+        )
+
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "generate", fake_generate)
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "repair_sql", fake_repair)
+    conversation_id = client.post("/api/conversations").json()["id"]
+
+    response = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "分析2025年各区房价趋势"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["queries"][0]["sql"].startswith("SELECT month, district, avg_price")
+    assert body["datasets"][0]["rows"]
+    assert body["chart"]["y_fields"] == ["avg_price"]
+    assert body["metadata"]["sql_repair_status"] == "repaired"
+    assert body["metadata"]["sql_repair_attempts"][0]["reason"] == "execution_error"
+
+
+def test_deepseek_mode_retries_when_sql_returns_empty_rows(client, monkeypatch):
+    _deepseek_env(monkeypatch)
+
+    def fake_generate(self, question, context, knowledge):
+        return TextToSqlResult(
+            sql=(
+                "SELECT month, district, avg_price FROM house_price_monthly "
+                "WHERE month LIKE '2025-%' AND district = '不存在区域'"
+            ),
+            reasoning="第一次条件过窄。",
+            chart=ChartSpec(type="line", x_field="month", y_fields=["avg_price"], title="空结果图表"),
+            confidence=0.67,
+            used_knowledge_ids=[item.id for item in knowledge],
+        )
+
+    def fake_repair(self, question, context, knowledge, failed_sql, error_message, repair_reason):
+        assert repair_reason == "empty_result"
+        return TextToSqlResult(
+            sql=(
+                "SELECT month, district, avg_price FROM house_price_monthly "
+                "WHERE month LIKE '2025-%' ORDER BY month, district"
+            ),
+            reasoning="已移除不存在的区域条件以放宽查询范围。",
+            chart=ChartSpec(type="line", x_field="month", y_fields=["avg_price"], title="放宽后的房价趋势"),
+            confidence=0.86,
+            used_knowledge_ids=[item.id for item in knowledge],
+        )
+
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "generate", fake_generate)
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "repair_sql", fake_repair)
+    conversation_id = client.post("/api/conversations").json()["id"]
+
+    response = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "分析2025年不存在区域房价趋势"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["datasets"][0]["rows"]
+    assert "不存在区域" not in body["queries"][0]["sql"]
+    assert body["metadata"]["sql_repair_status"] == "empty_result_retried"
+    assert body["metadata"]["sql_repair_attempts"][0]["reason"] == "empty_result"
+
+
 def test_deepseek_mode_simple_question_returns_three_recommendations_without_model_call(client, monkeypatch):
     _deepseek_env(monkeypatch)
 

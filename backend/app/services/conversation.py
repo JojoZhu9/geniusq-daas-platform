@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -212,6 +213,39 @@ def _repair_chart(
     )
 
 
+def _apply_sql_repair(
+    engine: object,
+    plan: AnalysisPlan,
+    query: Any,
+    question: str,
+    context: QueryContext,
+    error_message: str,
+    reason: str,
+) -> bool:
+    repair = getattr(engine, "repair_sql", None)
+    if repair is None:
+        return False
+    original_sql = query.sql
+    result = repair(question, context, original_sql, error_message, reason)
+    repaired_sql = result.sql.strip()
+    if not repaired_sql or repaired_sql == original_sql.strip():
+        return False
+    query.sql = repaired_sql
+    if result.chart:
+        plan.chart = result.chart
+    if result.reasoning:
+        plan.metadata["sql_repair_reasoning"] = result.reasoning
+    plan.metadata.setdefault("sql_repair_attempts", []).append(
+        {
+            "reason": reason,
+            "from_sql": original_sql,
+            "to_sql": repaired_sql,
+            "message": error_message[:240],
+        }
+    )
+    return True
+
+
 def _result_insights(plan: AnalysisPlan, datasets: list[dict[str, Any]]) -> list[str]:
     insights = list(plan.insights)
     price_rows = [
@@ -333,7 +367,8 @@ def run_chat(
 
     inherited_context = any(value is not None for value in previous.model_dump().values())
     context = merge_context(previous, question)
-    plan = (engine or select_analysis_engine(session)).analyze(question, context)
+    analysis_engine = engine or select_analysis_engine(session)
+    plan = analysis_engine.analyze(question, context)
     used_recommendations = _used_questions_and_recommendations(session, conversation_id)
     if plan.needs_clarification:
         plan.suggestions = _dedupe_recommendations(
@@ -358,9 +393,47 @@ def run_chat(
                     "请修改问题后重试，或切换 LLM_MODE=offline",
                 ) from exc
             plan.metadata["sql_validation_status"] = "passed"
-            rows = execute_read_only(
-                target_engine, safe_sql, get_settings().query_row_limit
-            )
+            try:
+                rows = execute_read_only(
+                    target_engine, safe_sql, get_settings().query_row_limit
+                )
+            except SQLAlchemyError as exc:
+                if _apply_sql_repair(
+                    analysis_engine,
+                    plan,
+                    query,
+                    question,
+                    context,
+                    str(exc),
+                    "execution_error",
+                ):
+                    plan.metadata["sql_repair_status"] = "repaired"
+                    safe_sql = validate_read_only_sql(query.sql, ALLOWED_TABLES)
+                    rows = execute_read_only(
+                        target_engine, safe_sql, get_settings().query_row_limit
+                    )
+                else:
+                    plan.metadata["sql_validation_status"] = "execution_failed"
+                    raise ApiError(
+                        422,
+                        "SQL_EXECUTION_FAILED",
+                        f"SQL 执行失败，且自动修复未成功：{exc}",
+                        "请换一种问法，或检查模型生成 SQL 是否与数据表字段一致",
+                    ) from exc
+            if not rows and _apply_sql_repair(
+                analysis_engine,
+                plan,
+                query,
+                question,
+                context,
+                "SQL 执行成功但返回 0 行",
+                "empty_result",
+            ):
+                plan.metadata["sql_repair_status"] = "empty_result_retried"
+                safe_sql = validate_read_only_sql(query.sql, ALLOWED_TABLES)
+                rows = execute_read_only(
+                    target_engine, safe_sql, get_settings().query_row_limit
+                )
             datasets.append(_dataset(query.source, safe_sql, rows))
     chart = _repair_chart(plan.chart, datasets, question, plan.metadata)
 

@@ -361,6 +361,24 @@ class DeepSeekAnalysisEngine:
             },
         )
 
+    def repair_sql(
+        self,
+        question: str,
+        context: QueryContext,
+        failed_sql: str,
+        error_message: str,
+        repair_reason: str,
+    ):
+        knowledge = retrieve_relevant_knowledge(self.session, question)
+        return self.service.repair_sql(
+            question,
+            context,
+            knowledge,
+            failed_sql,
+            error_message,
+            repair_reason,
+        )
+
     @staticmethod
     def _follow_ups(context: QueryContext) -> list[str]:
         year = context.year_from or context.year_to or 2025

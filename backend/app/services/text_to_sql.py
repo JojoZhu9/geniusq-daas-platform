@@ -76,6 +76,50 @@ class DeepSeekTextToSqlService:
         parsed = parse_model_json(content)
         return self._normalize_result(parsed, knowledge)
 
+    def repair_sql(
+        self,
+        question: str,
+        context: QueryContext,
+        knowledge: list[RetrievedKnowledge],
+        failed_sql: str,
+        error_message: str,
+        repair_reason: str,
+    ) -> TextToSqlResult:
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": self._system_prompt()},
+                {
+                    "role": "user",
+                    "content": self._repair_prompt(
+                        question,
+                        context,
+                        knowledge,
+                        failed_sql,
+                        error_message,
+                        repair_reason,
+                    ),
+                },
+            ],
+            "temperature": 0.05,
+            "response_format": {"type": "json_object"},
+            "max_tokens": 1200,
+        }
+        response = self.client.post(
+            f"{self.base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        raw = response.json()
+        content = raw["choices"][0]["message"]["content"]
+        parsed = parse_model_json(content)
+        return self._normalize_result(parsed, knowledge)
+
     @staticmethod
     def _system_prompt() -> str:
         return (
@@ -124,6 +168,33 @@ class DeepSeekTextToSqlService:
                 f"用户问题：{question}",
                 "",
                 "返回字段：needs_clarification, suggestions, sql, reasoning, chart_suggestion, confidence。",
+            ]
+        )
+
+    @staticmethod
+    def _repair_prompt(
+        question: str,
+        context: QueryContext,
+        knowledge: list[RetrievedKnowledge],
+        failed_sql: str,
+        error_message: str,
+        repair_reason: str,
+    ) -> str:
+        return "\n".join(
+            [
+                DeepSeekTextToSqlService._user_prompt(question, context, knowledge),
+                "",
+                "上一次 SQL 需要修复：",
+                failed_sql,
+                "",
+                f"修复原因：{repair_reason}",
+                f"错误或诊断信息：{error_message}",
+                "",
+                "请只返回修复后的 JSON。修复要求：",
+                "1. sql 必须仍然是 SQLite 单条 SELECT 或 WITH 查询。",
+                "2. 不要使用不存在的字段或未授权数据表。",
+                "3. 如果原因是 empty_result，请优先放宽过窄的 WHERE 条件，但保留用户问题的核心年份和指标。",
+                "4. chart_suggestion 的 x_field 和 y_fields 必须来自修复后 SQL 的 SELECT 输出字段。",
             ]
         )
 
