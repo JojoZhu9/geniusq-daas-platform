@@ -43,6 +43,49 @@ def test_follow_up_inherits_year_and_overrides_district(client):
     assert "2.3" in second["requirement_ids"]
 
 
+def test_follow_up_relative_previous_year_updates_context_and_query(client):
+    conversation_id = client.post("/api/conversations").json()["id"]
+    first = client.post(
+        "/api/chat",
+        json={
+            "conversation_id": conversation_id,
+            "question": "分析2025年各区平均房价",
+        },
+    ).json()
+    second = client.post(
+        "/api/chat",
+        json={
+            "conversation_id": conversation_id,
+            "question": "那上一年呢",
+        },
+    ).json()
+
+    assert first["context"]["year_from"] == 2025
+    assert second["context"]["year_from"] == 2024
+    assert second["context"]["year_to"] == 2024
+    assert "2024" in second["queries"][0]["sql"]
+    assert "2025" not in second["queries"][0]["sql"]
+
+
+def test_follow_up_district_alias_keeps_previous_year(client):
+    conversation_id = client.post("/api/conversations").json()["id"]
+    client.post(
+        "/api/chat",
+        json={
+            "conversation_id": conversation_id,
+            "question": "分析2025年各区平均房价",
+        },
+    )
+    follow_up = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "那朝阳呢"},
+    ).json()
+
+    assert follow_up["context"]["year_from"] == 2025
+    assert follow_up["context"]["district"] == "朝阳区"
+    assert {row["district"] for row in follow_up["datasets"][0]["rows"]} == {"朝阳区"}
+
+
 def test_completed_analysis_can_be_reloaded(client):
     conversation_id = client.post("/api/conversations").json()["id"]
     created = client.post(

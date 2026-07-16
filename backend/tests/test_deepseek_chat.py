@@ -1,6 +1,7 @@
 from app.config import get_settings
 from app.schemas import ChartSpec, TextToSqlResult
 from app.services import text_to_sql
+from app.services.text_to_sql import ModelOutputError
 import pytest
 
 
@@ -338,6 +339,204 @@ def test_deepseek_mode_repeated_simple_questions_do_not_repeat_recommendations(c
     assert len(first["suggestions"]) == 3
     assert len(second["suggestions"]) == 3
     assert set(first["suggestions"]).isdisjoint(second["suggestions"])
+
+
+def test_deepseek_mode_normalizes_district_alias_from_follow_up_sql(client, monkeypatch):
+    _deepseek_env(monkeypatch)
+
+    def fake_generate(self, question, context, knowledge, metrics=None):
+        if "朝阳" not in question:
+            return TextToSqlResult(
+                sql=(
+                    "SELECT month, district, avg_price FROM house_price_monthly "
+                    "WHERE month LIKE '2025-%' ORDER BY month, district"
+                ),
+                reasoning="首轮趋势分析。",
+                chart=ChartSpec(
+                    type="line",
+                    x_field="month",
+                    y_fields=["avg_price"],
+                    title="2025年各区房价趋势",
+                ),
+                confidence=0.82,
+                used_knowledge_ids=[item.id for item in knowledge],
+            )
+        assert context.year_from == 2025
+        assert context.district == "朝阳区"
+        return TextToSqlResult(
+            sql=(
+                "SELECT month, district, avg_price FROM house_price_monthly "
+                "WHERE month LIKE '2025-%' AND district = '朝阳' ORDER BY month"
+            ),
+            reasoning="模型使用了区域简称。",
+            chart=ChartSpec(
+                type="line",
+                x_field="month",
+                y_fields=["avg_price"],
+                title="2025年朝阳区房价趋势",
+            ),
+            confidence=0.82,
+            used_knowledge_ids=[item.id for item in knowledge],
+        )
+
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "generate", fake_generate)
+    conversation_id = client.post("/api/conversations").json()["id"]
+    client.post(
+        "/api/chat",
+        json={
+            "conversation_id": conversation_id,
+            "question": "分析2025年各区平均房价",
+        },
+    )
+
+    response = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "那朝阳呢"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["context"]["district"] == "朝阳区"
+    assert body["datasets"][0]["rows"]
+    assert {row["district"] for row in body["datasets"][0]["rows"]} == {"朝阳区"}
+    assert "district = '朝阳区'" in body["queries"][0]["sql"]
+    assert body["metadata"]["sql_district_normalized"] is True
+
+
+def test_deepseek_mode_does_not_crash_when_sql_repair_returns_invalid_json(client, monkeypatch):
+    _deepseek_env(monkeypatch)
+
+    def fake_generate(self, question, context, knowledge, metrics=None):
+        return TextToSqlResult(
+            sql=(
+                "SELECT month, district, avg_price FROM house_price_monthly "
+                "WHERE month LIKE '2025-%' AND district = '不存在区域'"
+            ),
+            reasoning="第一次查询条件过窄。",
+            chart=ChartSpec(type="line", x_field="month", y_fields=["avg_price"], title="空结果图表"),
+            confidence=0.67,
+            used_knowledge_ids=[item.id for item in knowledge],
+        )
+
+    def fake_repair(self, question, context, knowledge, failed_sql, error_message, repair_reason):
+        raise ModelOutputError("模型返回不是合法 JSON")
+
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "generate", fake_generate)
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "repair_sql", fake_repair)
+    conversation_id = client.post("/api/conversations").json()["id"]
+
+    response = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "分析2025年不存在区域房价趋势"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "completed"
+    assert body["datasets"][0]["rows"] == []
+    assert body["metadata"]["sql_repair_status"] == "failed"
+    assert "模型返回不是合法 JSON" in body["metadata"]["sql_repair_error"]
+
+
+def test_deepseek_mode_scopes_sql_to_single_year_context_when_model_omits_year(client, monkeypatch):
+    _deepseek_env(monkeypatch)
+
+    def fake_generate(self, question, context, knowledge, metrics=None):
+        if "上一年" not in question:
+            return TextToSqlResult(
+                sql=(
+                    "SELECT month, district, avg_price FROM house_price_monthly "
+                    "WHERE month LIKE '2025-%' ORDER BY month, district"
+                ),
+                reasoning="首轮趋势分析。",
+                chart=ChartSpec(type="line", x_field="month", y_fields=["avg_price"], title="2025年房价趋势"),
+                confidence=0.75,
+                used_knowledge_ids=[item.id for item in knowledge],
+            )
+        assert context.year_from == 2024
+        return TextToSqlResult(
+            sql=(
+                "SELECT month, AVG(avg_price) AS avg_price FROM house_price_monthly "
+                "GROUP BY month ORDER BY month"
+            ),
+            reasoning="模型漏掉了年份过滤。",
+            chart=ChartSpec(type="line", x_field="month", y_fields=["avg_price"], title="上一年房价趋势"),
+            confidence=0.75,
+            used_knowledge_ids=[item.id for item in knowledge],
+        )
+
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "generate", fake_generate)
+    conversation_id = client.post("/api/conversations").json()["id"]
+    client.post(
+        "/api/chat",
+        json={
+            "conversation_id": conversation_id,
+            "question": "分析2025年各区平均房价",
+        },
+    )
+
+    response = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "那上一年呢"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["context"]["year_from"] == 2024
+    assert "2024-%" in body["queries"][0]["sql"]
+    assert body["metadata"]["sql_context_scoped"] is True
+    assert {row["month"][:4] for row in body["datasets"][0]["rows"]} == {"2024"}
+
+
+def test_deepseek_mode_corrects_sql_year_when_model_conflicts_with_context(client, monkeypatch):
+    _deepseek_env(monkeypatch)
+
+    def fake_generate(self, question, context, knowledge, metrics=None):
+        if "上一年" not in question:
+            return TextToSqlResult(
+                sql=(
+                    "SELECT month, district, avg_price FROM house_price_monthly "
+                    "WHERE month LIKE '2025-%' ORDER BY month, district"
+                ),
+                reasoning="首轮趋势分析。",
+                chart=ChartSpec(type="line", x_field="month", y_fields=["avg_price"], title="2025年房价趋势"),
+                confidence=0.75,
+                used_knowledge_ids=[item.id for item in knowledge],
+            )
+        assert context.year_from == 2024
+        return TextToSqlResult(
+            sql=(
+                "SELECT month, avg_price FROM house_price_monthly "
+                "WHERE substr(month, 1, 4) = '2023' ORDER BY month"
+            ),
+            reasoning="模型错误地把上一年再次回退到 2023。",
+            chart=ChartSpec(type="line", x_field="month", y_fields=["avg_price"], title="上一年房价趋势"),
+            confidence=0.75,
+            used_knowledge_ids=[item.id for item in knowledge],
+        )
+
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "generate", fake_generate)
+    conversation_id = client.post("/api/conversations").json()["id"]
+    client.post(
+        "/api/chat",
+        json={
+            "conversation_id": conversation_id,
+            "question": "分析2025年各区平均房价",
+        },
+    )
+
+    response = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "那上一年呢"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["context"]["year_from"] == 2024
+    assert "2024" in body["queries"][0]["sql"]
+    assert "2023" not in body["queries"][0]["sql"]
+    assert body["metadata"]["sql_context_year_corrected"] is True
+    assert {row["month"][:4] for row in body["datasets"][0]["rows"]} == {"2024"}
 
 
 def test_deepseek_mode_rejects_dangerous_sql(client, monkeypatch):
