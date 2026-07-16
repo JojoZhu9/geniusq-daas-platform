@@ -84,6 +84,11 @@ class DeepSeekTextToSqlService:
             "不允许 INSERT、UPDATE、DELETE、DROP、ALTER、CREATE。"
             "如果用户问题已经包含年份、指标、表名、字段名或明确分析对象，请直接生成 SQL，"
             "不要因为缺少展示偏好、排序方式或图表细节而要求澄清。"
+            "SQL SELECT 字段必须包含 chart_suggestion 的 x_field 和全部 y_fields；"
+            "图表字段必须来自 SQL 结果字段。"
+            "当问题提到租金、挂牌、空置、成交、人口、收入、地铁、就业或通勤时，"
+            "优先选择对应字段 rent_price、listing_count、vacancy_rate、transaction_count、"
+            "resident_population、median_income、metro_coverage_rate、employment_density、avg_commute_minutes。"
             "只有在缺少可查询指标或无法判断任何可用数据表时，才返回 needs_clarification=true。"
             "JSON 示例："
             '{"needs_clarification":false,"suggestions":[],"sql":"SELECT ...",'

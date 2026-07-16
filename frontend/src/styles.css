@@ -158,6 +158,14 @@ button { border: 0; }
 .data-table th, .data-table td { padding: 7px 9px; border-bottom: 1px solid #edf0f3; text-align: left; }
 .data-table th { color: #546a81; background: #f7f9fb; }
 .result-actions { padding: 0 14px 14px; }
+.result-actions .secondary-button {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  pointer-events: none;
+}
 .result-meta { margin-left: auto; color: #8a98a8; font-size: 10px; }
 .follow-ups { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 14px 12px; padding-top: 10px; border-top: 1px dashed #dce4ec; }
 .follow-ups strong { margin-right: 3px; color: #52677e; font-size: 11px; }

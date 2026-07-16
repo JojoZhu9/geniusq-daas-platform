@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.errors import ApiError
-from app.schemas import AnalysisPlan, QueryContext
+from app.schemas import AnalysisPlan, ChartSpec, QueryContext
 from app.services.analysis import DeepSeekAnalysisEngine, OfflineAnalysisEngine
 from app.services.sql_guard import (
     TABLE_REF,
@@ -28,6 +28,23 @@ ALLOWED_TABLES = {
     "commuting_metrics",
 }
 DISTRICTS = ("海淀区", "朝阳区", "西城区", "东城区", "丰台区", "通州区")
+CHART_FIELD_PRIORITY = (
+    (("租金", "rent"), ("rent_price",)),
+    (("挂牌", "房源"), ("listing_count",)),
+    (("空置",), ("vacancy_rate",)),
+    (("成交", "交易"), ("transaction_count", "avg_transaction_price", "new_house_count", "second_hand_count")),
+    (("新房",), ("new_house_count",)),
+    (("二手",), ("second_hand_count",)),
+    (("收入",), ("median_income",)),
+    (("家庭", "户数"), ("household_count",)),
+    (("人口",), ("resident_population", "growth_rate")),
+    (("地铁", "轨道"), ("metro_coverage_rate",)),
+    (("就业",), ("employment_density",)),
+    (("通勤",), ("avg_commute_minutes", "cross_district_ratio")),
+    (("同比",), ("yoy_change",)),
+    (("环比",), ("mom_change",)),
+    (("房价", "均价", "价格"), ("avg_price",)),
+)
 
 
 def utc_now() -> str:
@@ -94,6 +111,105 @@ def _dataset(source: str, sql: str, rows: list[dict[str, object]]) -> dict[str, 
         "fields": fields,
         "rows": rows,
     }
+
+
+def _is_number(value: object) -> bool:
+    if value is None or isinstance(value, bool):
+        return False
+    try:
+        float(value)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _chart_title(question: str, x_field: str, y_fields: list[str]) -> str:
+    metric_label = "、".join(y_fields) if y_fields else "查询结果"
+    if "租金" in question:
+        metric_label = "租金"
+    elif "挂牌" in question:
+        metric_label = "挂牌量"
+    elif "空置" in question:
+        metric_label = "空置率"
+    elif "成交" in question:
+        metric_label = "成交量"
+    elif "地铁" in question:
+        metric_label = "地铁覆盖率"
+    elif "就业" in question:
+        metric_label = "就业密度"
+    elif "人口" in question:
+        metric_label = "人口"
+    elif "通勤" in question:
+        metric_label = "通勤指标"
+    elif "房价" in question or "均价" in question:
+        metric_label = "房价"
+    return f"{metric_label}按{x_field}分析"
+
+
+def _pick_y_fields(question: str, fields: list[str], numeric_fields: list[str]) -> list[str]:
+    lowered_question = question.lower()
+    for keywords, candidates in CHART_FIELD_PRIORITY:
+        if any(keyword.lower() in lowered_question for keyword in keywords):
+            matched = [field for field in candidates if field in numeric_fields]
+            if matched:
+                return matched[:2]
+    preferred = [
+        field
+        for field in (
+            "avg_price",
+            "rent_price",
+            "transaction_count",
+            "resident_population",
+            "avg_commute_minutes",
+            "median_income",
+        )
+        if field in numeric_fields
+    ]
+    return (preferred or numeric_fields)[:2]
+
+
+def _repair_chart(
+    chart: ChartSpec | None,
+    datasets: list[dict[str, Any]],
+    question: str,
+    metadata: dict[str, Any],
+) -> ChartSpec | None:
+    rows = [row for dataset in datasets for row in dataset["rows"]]
+    fields = list(dict.fromkeys(field for dataset in datasets for field in dataset["fields"]))
+    if not rows or not fields:
+        return None
+
+    numeric_fields = [
+        field for field in fields if any(_is_number(row.get(field)) for row in rows)
+    ]
+    if not numeric_fields:
+        metadata["chart_validation_status"] = "table_only_no_numeric_field"
+        return ChartSpec(type="table", x_field=fields[0], y_fields=[], title="查询结果明细")
+
+    valid_chart = (
+        chart is not None
+        and chart.x_field in fields
+        and bool(chart.y_fields)
+        and all(field in fields for field in chart.y_fields)
+        and any(field in numeric_fields for field in chart.y_fields)
+    )
+    if valid_chart:
+        metadata["chart_validation_status"] = "passed"
+        return chart
+
+    x_field = "month" if "month" in fields else "district" if "district" in fields else fields[0]
+    y_fields = _pick_y_fields(question, fields, numeric_fields)
+    chart_type = "line" if x_field == "month" else "bar"
+    metadata["chart_validation_status"] = "repaired"
+    metadata["chart_repair_reason"] = (
+        "模型未返回图表建议或图表字段不在 SQL 查询结果中，已按实际结果字段重建图表。"
+    )
+    return ChartSpec(
+        type=chart_type,
+        x_field=x_field,
+        y_fields=y_fields,
+        title=_chart_title(question, x_field, y_fields),
+    )
 
 
 def _result_insights(plan: AnalysisPlan, datasets: list[dict[str, Any]]) -> list[str]:
@@ -246,6 +362,7 @@ def run_chat(
                 target_engine, safe_sql, get_settings().query_row_limit
             )
             datasets.append(_dataset(query.source, safe_sql, rows))
+    chart = _repair_chart(plan.chart, datasets, question, plan.metadata)
 
     analysis_id = str(uuid.uuid4())
     timestamp = utc_now()
@@ -258,7 +375,7 @@ def run_chat(
         "steps": [step.model_dump() for step in plan.steps],
         "queries": [query.model_dump() for query in plan.queries],
         "datasets": datasets,
-        "chart": plan.chart.model_dump() if plan.chart else None,
+        "chart": chart.model_dump() if chart else None,
         "insights": _result_insights(plan, datasets),
         "follow_ups": plan.follow_ups,
         "requirement_ids": list(dict.fromkeys([

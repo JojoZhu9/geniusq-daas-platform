@@ -90,6 +90,44 @@ def test_deepseek_mode_executes_safe_generated_sql(client, monkeypatch):
     ]
 
 
+def test_deepseek_mode_repairs_irrelevant_or_invalid_chart_fields(client, monkeypatch):
+    _deepseek_env(monkeypatch)
+
+    def fake_generate(self, question, context, knowledge):
+        return TextToSqlResult(
+            sql=(
+                "SELECT month, district, rent_price FROM house_price_monthly "
+                "WHERE month LIKE '2025-%' AND district IN ('海淀区', '朝阳区') "
+                "ORDER BY month, district"
+            ),
+            reasoning="用户询问租金趋势，应使用 rent_price。",
+            chart=ChartSpec(
+                type="line",
+                x_field="not_in_result",
+                y_fields=["avg_price"],
+                title="错误的房价图表",
+            ),
+            confidence=0.84,
+            used_knowledge_ids=[item.id for item in knowledge],
+        )
+
+    monkeypatch.setattr(text_to_sql.DeepSeekTextToSqlService, "generate", fake_generate)
+    conversation_id = client.post("/api/conversations").json()["id"]
+
+    response = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "分析2025年海淀区和朝阳区租金趋势"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["datasets"][0]["fields"] == ["month", "district", "rent_price"]
+    assert body["chart"]["x_field"] == "month"
+    assert body["chart"]["y_fields"] == ["rent_price"]
+    assert body["chart"]["type"] == "line"
+    assert body["metadata"]["chart_validation_status"] == "repaired"
+
+
 def test_deepseek_mode_simple_question_returns_three_recommendations_without_model_call(client, monkeypatch):
     _deepseek_env(monkeypatch)
 
