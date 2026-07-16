@@ -75,12 +75,19 @@ def test_deepseek_mode_executes_safe_generated_sql(client, monkeypatch):
     assert body["datasets"][0]["rows"]
     trace_by_key = {step["key"]: step for step in body["steps"]}
     assert trace_by_key["retrieve_knowledge"]["tool"] == "knowledge_retriever"
+    assert trace_by_key["retrieve_knowledge"]["tool_label"] == "知识库检索工具"
+    assert "检索用户问题相关的知识片段" in trace_by_key["retrieve_knowledge"]["input_summary"]
+    assert any("命中" in item for item in trace_by_key["retrieve_knowledge"]["output_summary"])
     assert trace_by_key["retrieve_knowledge"]["output"]["knowledge_count"] >= 1
+    assert trace_by_key["select_tables_fields"]["tool_label"] == "数据表字段选择器"
     assert trace_by_key["select_tables_fields"]["output"]["tables"] == ["house_price_monthly"]
     assert trace_by_key["select_tables_fields"]["output"]["fields"] == ["month", "district", "avg_price"]
     assert trace_by_key["deepseek_text_to_sql"]["tool"] == "deepseek_chat_completion"
+    assert trace_by_key["deepseek_text_to_sql"]["tool_label"] == "DeepSeek SQL 生成工具"
     assert trace_by_key["deepseek_text_to_sql"]["output"]["sql"].startswith("SELECT month")
+    assert trace_by_key["validate_sql"]["tool_label"] == "只读 SQL 安全校验器"
     assert trace_by_key["validate_sql"]["output"] == {"status": "passed", "tables": ["house_price_monthly"]}
+    assert trace_by_key["execute_and_visualize"]["tool_label"] == "SQLite 查询与图表工具"
     assert trace_by_key["execute_and_visualize"]["output"]["row_count"] == len(body["datasets"][0]["rows"])
     assert trace_by_key["execute_and_visualize"]["output"]["chart_reason"] == "line chart selected for month trend"
     assert [step["title"] for step in body["steps"]] == [

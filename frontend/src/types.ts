@@ -11,6 +11,9 @@ export type AnalysisStep = {
   detail: string;
   status: "pending" | "running" | "completed" | "failed";
   tool?: string | null;
+  tool_label?: string | null;
+  input_summary?: string[];
+  output_summary?: string[];
   input?: Record<string, unknown> | null;
   output?: Record<string, unknown> | null;
   error?: string | null;

@@ -16,6 +16,9 @@ class AnalysisStep(BaseModel):
     detail: str
     status: Literal["pending", "running", "completed", "failed"] = "completed"
     tool: Optional[str] = None
+    tool_label: Optional[str] = None
+    input_summary: List[str] = Field(default_factory=list)
+    output_summary: List[str] = Field(default_factory=list)
     input: Optional[dict[str, Any]] = None
     output: Optional[dict[str, Any]] = None
     error: Optional[str] = None

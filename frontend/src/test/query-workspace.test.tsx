@@ -73,16 +73,21 @@ test("renders agent tool input and output summaries in the thinking timeline", (
         detail: "Choose the minimum schema needed for the question.",
         status: "completed",
         tool: "schema_selector",
+        tool_label: "数据表字段选择器",
+        input_summary: ["读取用户问题中的年份、区域和指标"],
+        output_summary: ["选择 house_price_monthly 表", "使用 district、avg_price 字段"],
         input: { question: "2025 district price analysis" },
         output: { tables: ["house_price_monthly"], fields: ["district", "avg_price"] }
       }]}
     />
   );
 
-  expect(screen.getByText("schema_selector")).toBeVisible();
-  expect(screen.getByText("Input")).toBeVisible();
-  expect(screen.getByText("Output")).toBeVisible();
-  expect(screen.getByText(/house_price_monthly/)).toBeVisible();
+  expect(screen.getByText("调用工具")).toBeVisible();
+  expect(screen.getByText("数据表字段选择器")).toBeVisible();
+  expect(screen.getByText("输入摘要")).toBeVisible();
+  expect(screen.getByText("输出摘要")).toBeVisible();
+  expect(screen.getByText("选择 house_price_monthly 表")).toBeVisible();
+  expect(screen.queryByText("schema_selector")).not.toBeInTheDocument();
 });
 
 test("configures deepseek api key from the workspace", async () => {
