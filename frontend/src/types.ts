@@ -10,6 +10,10 @@ export type AnalysisStep = {
   title: string;
   detail: string;
   status: "pending" | "running" | "completed" | "failed";
+  tool?: string | null;
+  input?: Record<string, unknown> | null;
+  output?: Record<string, unknown> | null;
+  error?: string | null;
 };
 
 export type PlannedQuery = { source: string; sql: string };

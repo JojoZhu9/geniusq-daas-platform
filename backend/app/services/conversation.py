@@ -355,6 +355,141 @@ def select_analysis_engine(session: Session):
     return OfflineAnalysisEngine()
 
 
+def _find_step(plan: AnalysisPlan, key: str):
+    return next((step for step in plan.steps if step.key == key), None)
+
+
+def _step_output(plan: AnalysisPlan, key: str, output: dict[str, Any], status: str = "completed") -> None:
+    step = _find_step(plan, key)
+    if step:
+        step.status = status
+        step.output = output
+
+
+def _step_failed(plan: AnalysisPlan, key: str, error: str, output: dict[str, Any] | None = None) -> None:
+    step = _find_step(plan, key)
+    if step:
+        step.status = "failed"
+        step.error = error
+        step.output = output
+
+
+def _tables_from_sql(sql: str) -> list[str]:
+    return sorted({match.group(1) for match in TABLE_REF.finditer(sql)})
+
+
+def _chart_reason(chart: ChartSpec | None, datasets: list[dict[str, Any]]) -> str:
+    if chart is None:
+        return "table view selected because no valid chart suggestion was available"
+    if chart.type == "line" and chart.x_field in {"month", "date"}:
+        return "line chart selected for month trend"
+    if chart.type == "bar":
+        return "bar chart selected for category comparison"
+    if chart.type == "table":
+        return "table selected for detailed row inspection"
+    fields = datasets[0]["fields"] if datasets else []
+    return f"{chart.type} chart selected for x={chart.x_field}, y={chart.y_fields}, available_fields={fields}"
+
+
+def _prime_agent_trace(plan: AnalysisPlan, question: str, context: QueryContext) -> None:
+    metadata = plan.metadata
+    used_knowledge = metadata.get("used_knowledge") or []
+    used_metrics = metadata.get("used_metrics") or []
+    query_sql = plan.queries[0].sql if plan.queries else ""
+    chart = plan.chart.model_dump() if plan.chart else None
+    trace_defaults: dict[str, dict[str, Any]] = {
+        "understand_question": {
+            "tool": "intent_parser",
+            "input": {"question": question},
+            "output": context.model_dump(),
+        },
+        "merge_context": {
+            "tool": "conversation_context",
+            "input": {"question": question},
+            "output": context.model_dump(),
+        },
+        "retrieve_knowledge": {
+            "tool": "knowledge_retriever",
+            "input": {"question": question, "limit": 5},
+            "output": {
+                "knowledge_count": len(used_knowledge),
+                "knowledge_titles": [item.get("title") for item in used_knowledge],
+                "metric_count": len(used_metrics),
+                "metric_names": [item.get("name") for item in used_metrics],
+            },
+        },
+        "select_tables_fields": {
+            "tool": "schema_selector",
+            "input": {
+                "question": question,
+                "knowledge_tables": sorted({
+                    table
+                    for item in used_knowledge
+                    for table in item.get("linked_tables", [])
+                }),
+                "metric_tables": sorted({
+                    table
+                    for item in used_metrics
+                    for table in item.get("tables", [])
+                }),
+            },
+        },
+        "deepseek_text_to_sql": {
+            "tool": "deepseek_chat_completion",
+            "input": {
+                "model": metadata.get("model"),
+                "knowledge_count": len(used_knowledge),
+                "metric_count": len(used_metrics),
+            },
+            "output": {
+                "sql": query_sql,
+                "confidence": metadata.get("confidence"),
+                "chart": chart,
+            },
+        },
+        "validate_sql": {
+            "tool": "sql_guard",
+            "input": {"sql": query_sql},
+        },
+        "execute_and_visualize": {
+            "tool": "sqlite_query_runner",
+            "input": {"row_limit": get_settings().query_row_limit},
+        },
+    }
+    for step in plan.steps:
+        defaults = trace_defaults.get(step.key)
+        if defaults:
+            step.tool = defaults.get("tool")
+            step.input = defaults.get("input")
+            if defaults.get("output") is not None:
+                step.output = defaults.get("output")
+
+
+def _finalize_agent_trace(
+    plan: AnalysisPlan,
+    safe_sql: str | None,
+    datasets: list[dict[str, Any]],
+    chart: ChartSpec | None,
+) -> None:
+    tables = _tables_from_sql(safe_sql or "")
+    fields = datasets[0]["fields"] if datasets else []
+    if tables or fields:
+        _step_output(plan, "select_tables_fields", {"tables": tables, "fields": fields})
+    if safe_sql:
+        _step_output(plan, "validate_sql", {"status": "passed", "tables": tables})
+    row_count = sum(len(dataset["rows"]) for dataset in datasets)
+    _step_output(
+        plan,
+        "execute_and_visualize",
+        {
+            "row_count": row_count,
+            "dataset_count": len(datasets),
+            "chart_type": chart.type if chart else None,
+            "chart_reason": _chart_reason(chart, datasets),
+        },
+    )
+
+
 def run_chat(
     session: Session,
     conversation_id: str,
@@ -369,6 +504,7 @@ def run_chat(
     context = merge_context(previous, question)
     analysis_engine = engine or select_analysis_engine(session)
     plan = analysis_engine.analyze(question, context)
+    _prime_agent_trace(plan, question, context)
     used_recommendations = _used_questions_and_recommendations(session, conversation_id)
     if plan.needs_clarification:
         plan.suggestions = _dedupe_recommendations(
@@ -379,6 +515,7 @@ def run_chat(
             plan.follow_ups, used_recommendations, context, question
         )
     datasets: list[dict[str, Any]] = []
+    last_safe_sql: str | None = None
     if not plan.needs_clarification:
         target_engine = session.get_bind()
         for query in plan.queries:
@@ -386,6 +523,12 @@ def run_chat(
                 safe_sql = validate_read_only_sql(query.sql, ALLOWED_TABLES)
             except SqlSafetyError as exc:
                 plan.metadata["sql_validation_status"] = "rejected"
+                _step_failed(
+                    plan,
+                    "validate_sql",
+                    str(exc),
+                    {"status": "rejected", "tables": _tables_from_sql(query.sql)},
+                )
                 raise ApiError(
                     422,
                     "SQL_REJECTED",
@@ -393,6 +536,7 @@ def run_chat(
                     "请修改问题后重试，或切换 LLM_MODE=offline",
                 ) from exc
             plan.metadata["sql_validation_status"] = "passed"
+            last_safe_sql = safe_sql
             try:
                 rows = execute_read_only(
                     target_engine, safe_sql, get_settings().query_row_limit
@@ -414,6 +558,12 @@ def run_chat(
                     )
                 else:
                     plan.metadata["sql_validation_status"] = "execution_failed"
+                    _step_failed(
+                        plan,
+                        "execute_and_visualize",
+                        str(exc),
+                        {"sql": safe_sql, "tables": _tables_from_sql(safe_sql)},
+                    )
                     raise ApiError(
                         422,
                         "SQL_EXECUTION_FAILED",
@@ -436,6 +586,7 @@ def run_chat(
                 )
             datasets.append(_dataset(query.source, safe_sql, rows))
     chart = _repair_chart(plan.chart, datasets, question, plan.metadata)
+    _finalize_agent_trace(plan, last_safe_sql, datasets, chart)
 
     analysis_id = str(uuid.uuid4())
     timestamp = utc_now()

@@ -15,6 +15,10 @@ class AnalysisStep(BaseModel):
     title: str
     detail: str
     status: Literal["pending", "running", "completed", "failed"] = "completed"
+    tool: Optional[str] = None
+    input: Optional[dict[str, Any]] = None
+    output: Optional[dict[str, Any]] = None
+    error: Optional[str] = None
 
 
 class PlannedQuery(BaseModel):

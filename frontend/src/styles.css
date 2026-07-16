@@ -134,6 +134,14 @@ button { border: 0; }
 .step-item.pending .step-index { color: #8392a4; background: #d8e2ec; }
 .thinking-timeline strong { color: #31475d; font-size: 12px; }
 .thinking-timeline p { margin: 3px 0 0; color: #758497; font-size: 11px; }
+.step-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.step-title-row code { padding: 2px 6px; border: 1px solid #cfe1f4; border-radius: 999px; color: #176fbd; background: #eef7ff; font-size: 10px; }
+.tool-trace-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 8px; }
+.tool-trace-grid section { min-width: 0; border: 1px solid #dce7f2; border-radius: 8px; background: #fff; overflow: hidden; }
+.tool-trace-grid span { display: block; padding: 5px 8px; color: #5f7184; background: #f1f6fb; font-size: 10px; font-weight: 700; }
+.tool-trace-grid pre { margin: 0; padding: 8px; max-height: 150px; overflow: auto; color: #32475b; white-space: pre-wrap; word-break: break-word; font-size: 10px; line-height: 1.45; }
+.tool-trace-grid .tool-error { border-color: #f0c9c9; }
+.tool-trace-grid .tool-error span { color: #a54141; background: #fff1f1; }
 .step-status { color: #29986c; font-size: 10px; }
 .step-status.running { color: #0878df; }
 .step-status.pending { color: #8a98a8; }

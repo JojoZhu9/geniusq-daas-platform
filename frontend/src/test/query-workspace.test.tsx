@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, vi } from "vitest";
+import { ThinkingTimeline } from "../components/ThinkingTimeline";
 import { QueryWorkspace } from "../pages/QueryWorkspace";
 
 const completedAnalysis = {
@@ -61,6 +62,27 @@ function renderWorkspace() {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+});
+
+test("renders agent tool input and output summaries in the thinking timeline", () => {
+  render(
+    <ThinkingTimeline
+      steps={[{
+        key: "select_schema",
+        title: "Select tables and fields",
+        detail: "Choose the minimum schema needed for the question.",
+        status: "completed",
+        tool: "schema_selector",
+        input: { question: "2025 district price analysis" },
+        output: { tables: ["house_price_monthly"], fields: ["district", "avg_price"] }
+      }]}
+    />
+  );
+
+  expect(screen.getByText("schema_selector")).toBeVisible();
+  expect(screen.getByText("Input")).toBeVisible();
+  expect(screen.getByText("Output")).toBeVisible();
+  expect(screen.getByText(/house_price_monthly/)).toBeVisible();
 });
 
 test("configures deepseek api key from the workspace", async () => {
