@@ -34,6 +34,13 @@ const completedAnalysis = {
   created_at: "2026-07-14T00:00:00+08:00"
 };
 
+const defaultModelSettings = {
+  llm_mode: "offline",
+  deepseek_base_url: "https://api.deepseek.com",
+  deepseek_model: "deepseek-v4-flash",
+  deepseek_api_key_configured: false
+};
+
 function json(body: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(body), {
     status,
@@ -56,10 +63,44 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
+test("configures deepseek api key from the workspace", async () => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations") return json({ id: "c1" }, 201);
+    if (path === "/api/model-settings" && (!init?.method || init.method === "GET")) {
+      return json(defaultModelSettings);
+    }
+    if (path === "/api/model-settings/deepseek") {
+      return json({
+        ...defaultModelSettings,
+        llm_mode: "deepseek",
+        deepseek_api_key_configured: true
+      });
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace();
+  await screen.findByText("配置 DeepSeek API");
+  await userEvent.click(screen.getByRole("button", { name: "配置 DeepSeek API" }));
+  await userEvent.type(screen.getByLabelText("DeepSeek API Key"), "sk-test-secret");
+  await userEvent.click(screen.getByRole("button", { name: "保存配置" }));
+
+  expect(await screen.findByText("DeepSeek API Key 已配置，本次本地后端运行生效")).toBeVisible();
+  const configRequest = fetchMock.mock.calls.find(([input]) => String(input) === "/api/model-settings/deepseek");
+  expect(configRequest?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
+  expect(JSON.parse(String(configRequest?.[1]?.body))).toMatchObject({
+    api_key: "sk-test-secret",
+    model: "deepseek-v4-flash"
+  });
+});
+
 test("submits an incomplete question and offers clickable suggestions", async () => {
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
     const path = String(input);
     if (path === "/api/conversations") return json({ id: "c1" }, 201);
+    if (path === "/api/model-settings") return json(defaultModelSettings);
     if (path === "/api/chat") return json({
       ...completedAnalysis,
       status: "needs_clarification",
@@ -94,6 +135,7 @@ test("expands auditable steps and saves the chart to a dashboard", async () => {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/api/conversations") return json({ id: "c1" }, 201);
+    if (path === "/api/model-settings") return json(defaultModelSettings);
     if (path === "/api/chat") return json(completedAnalysis);
     if (path === "/api/dashboards" && (!init?.method || init.method === "GET")) return json([existingDashboard]);
     if (path === "/api/dashboards" && init?.method === "POST") return json({ id: "d1", name: "房价分析看板", cards: [] }, 201);
@@ -149,6 +191,7 @@ test("shows deepseek metadata and saves positive feedback", async () => {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/api/conversations") return json({ id: "c1" }, 201);
+    if (path === "/api/model-settings") return json(defaultModelSettings);
     if (path === "/api/chat") return json(deepseekAnalysis);
     if (path === "/api/analysis/a-deepseek/feedback") return json({
       id: "feedback-1",

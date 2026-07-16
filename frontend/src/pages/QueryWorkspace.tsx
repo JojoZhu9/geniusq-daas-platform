@@ -9,6 +9,13 @@ import type { AnalysisResponse, ChartSpec, Dashboard } from "../types";
 
 type Exchange = { question: string; response: AnalysisResponse };
 
+type ModelSettings = {
+  llm_mode: string;
+  deepseek_base_url: string;
+  deepseek_model: string;
+  deepseek_api_key_configured: boolean;
+};
+
 const LIVE_STEPS = [
   { key: "understand_question", title: "理解用户问题", detail: "正在识别用户意图、时间范围、区域和指标…" },
   { key: "merge_context", title: "合并会话上下文", detail: "正在读取历史对话，合并上一轮年份、区域和指标…" },
@@ -53,6 +60,10 @@ export function QueryWorkspace() {
   const [thinkingCollapsed, setThinkingCollapsed] = useState(false);
   const [pendingQuestion, setPendingQuestion] = useState("");
   const [liveStepIndex, setLiveStepIndex] = useState(0);
+  const [modelSettings, setModelSettings] = useState<ModelSettings | null>(null);
+  const [showModelSettings, setShowModelSettings] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [modelInput, setModelInput] = useState("deepseek-v4-flash");
   const [notice, setNotice] = useState("");
   const [initError, setInitError] = useState("");
   const [chartTypes, setChartTypes] = useState<Record<string, ChartSpec["type"]>>({});
@@ -63,6 +74,12 @@ export function QueryWorkspace() {
     api.post<{ id: string }>("/api/conversations")
       .then((value) => setConversationId(value.id))
       .catch(() => setInitError("无法初始化本地会话，请确认后端服务已启动。"));
+    api.get<ModelSettings>("/api/model-settings")
+      .then((settings) => {
+        setModelSettings(settings);
+        setModelInput(settings.deepseek_model || "deepseek-v4-flash");
+      })
+      .catch(() => setModelSettings(null));
   }, []);
 
   const askMutation = useMutation({
@@ -138,6 +155,19 @@ export function QueryWorkspace() {
     setNotice(saveAsExample ? "反馈已保存，并已收藏为 SQL 示例" : "反馈已保存");
   }
 
+  async function saveModelSettings(event: FormEvent) {
+    event.preventDefault();
+    const settings = await api.post<ModelSettings>("/api/model-settings/deepseek", {
+      api_key: apiKeyInput.trim(),
+      base_url: modelSettings?.deepseek_base_url || "https://api.deepseek.com",
+      model: modelInput.trim() || "deepseek-v4-flash"
+    });
+    setModelSettings(settings);
+    setApiKeyInput("");
+    setShowModelSettings(false);
+    setNotice("DeepSeek API Key 已配置，本次本地后端运行生效");
+  }
+
   const error = askMutation.error instanceof ApiClientError
     ? `${askMutation.error.message}；${askMutation.error.payload.action}`
     : askMutation.error ? "分析失败，请稍后重试。" : "";
@@ -152,6 +182,47 @@ export function QueryWorkspace() {
         <div><small>智慧问数 / 智能问数工作台</small><h1>用自然语言探索可信数据</h1></div>
         <div className="heading-actions"><span className="offline-chip"><i />离线规则引擎</span><button className="secondary-button" type="button" onClick={resetConversation}>＋ 新建会话</button></div>
       </div>
+      <div className="model-config-strip panel">
+        <span className={`offline-chip ${modelSettings?.llm_mode === "deepseek" ? "online" : ""}`}>
+          <i />{modelSettings?.llm_mode === "deepseek" ? "DeepSeek 已启用" : "离线规则引擎"}
+        </span>
+        <button className="secondary-button" type="button" onClick={() => setShowModelSettings(true)}>配置 DeepSeek API</button>
+        <small>{modelSettings?.deepseek_api_key_configured ? "API Key 已配置，可覆盖更新" : "未配置 API Key 时使用离线演示规则"}</small>
+      </div>
+      {showModelSettings && (
+        <div className="model-settings-panel panel" role="dialog" aria-label="DeepSeek API 配置">
+          <div>
+            <strong>DeepSeek API 配置</strong>
+            <p>给演示平台填入 API Key 后，本次本地后端会切换到真实 DeepSeek Text-to-SQL。Key 不会显示在页面，也不会写入仓库。</p>
+          </div>
+          <form onSubmit={saveModelSettings}>
+            <label>
+              API Key
+              <input
+                aria-label="DeepSeek API Key"
+                type="password"
+                value={apiKeyInput}
+                onChange={(event) => setApiKeyInput(event.target.value)}
+                placeholder={modelSettings?.deepseek_api_key_configured ? "已配置，可输入新 Key 覆盖" : "sk-..."}
+                required={!modelSettings?.deepseek_api_key_configured}
+              />
+            </label>
+            <label>
+              模型
+              <input
+                aria-label="DeepSeek 模型"
+                value={modelInput}
+                onChange={(event) => setModelInput(event.target.value)}
+                placeholder="deepseek-v4-flash"
+              />
+            </label>
+            <div>
+              <button className="secondary-button" type="button" onClick={() => setShowModelSettings(false)}>取消</button>
+              <button className="primary-button" type="submit" disabled={!apiKeyInput.trim()}>保存配置</button>
+            </div>
+          </form>
+        </div>
+      )}
       <div className="query-layout">
         <main className="query-main panel">
           <div className="query-welcome">

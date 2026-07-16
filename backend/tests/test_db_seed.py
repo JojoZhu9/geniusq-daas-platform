@@ -21,7 +21,16 @@ def test_init_database_seeds_business_tables(tmp_path):
             count = connection.execute(
                 text("select count(*) from house_price_monthly")
             ).scalar_one()
+            enriched = connection.execute(
+                text(
+                    "select rent_price, listing_count, vacancy_rate "
+                    "from house_price_monthly limit 1"
+                )
+            ).mappings().one()
         assert count >= 24
+        assert enriched["rent_price"] > 0
+        assert enriched["listing_count"] > 0
+        assert enriched["vacancy_rate"] > 0
     finally:
         engine.dispose()
 

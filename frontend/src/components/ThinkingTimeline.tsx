@@ -4,8 +4,8 @@ export function ThinkingTimeline({ steps }: { steps: AnalysisStep[] }) {
   return (
     <ol className="thinking-timeline" aria-label="可审计执行步骤">
       {steps.map((step, index) => (
-        <li key={step.key}>
-          <span className="step-index">{index + 1}</span>
+        <li className={`step-item ${step.status}`} key={step.key}>
+          <span className="step-index">{step.status === "completed" ? "✓" : index + 1}</span>
           <div>
             <strong>{step.title}</strong>
             <p>{step.detail}</p>

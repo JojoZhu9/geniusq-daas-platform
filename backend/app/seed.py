@@ -9,6 +9,9 @@ SCHEMA_STATEMENTS = (
         district TEXT NOT NULL,
         month TEXT NOT NULL,
         avg_price INTEGER NOT NULL,
+        rent_price INTEGER NOT NULL DEFAULT 0,
+        listing_count INTEGER NOT NULL DEFAULT 0,
+        vacancy_rate REAL NOT NULL DEFAULT 0,
         mom_change REAL NOT NULL,
         yoy_change REAL NOT NULL,
         PRIMARY KEY (district, month)
@@ -20,6 +23,9 @@ SCHEMA_STATEMENTS = (
         month TEXT NOT NULL,
         transaction_count INTEGER NOT NULL,
         transaction_area REAL NOT NULL,
+        new_house_count INTEGER NOT NULL DEFAULT 0,
+        second_hand_count INTEGER NOT NULL DEFAULT 0,
+        avg_transaction_price INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (district, month)
     )
     """,
@@ -29,6 +35,8 @@ SCHEMA_STATEMENTS = (
         year INTEGER NOT NULL,
         resident_population REAL NOT NULL,
         growth_rate REAL NOT NULL,
+        median_income INTEGER NOT NULL DEFAULT 0,
+        household_count REAL NOT NULL DEFAULT 0,
         PRIMARY KEY (district, year)
     )
     """,
@@ -38,6 +46,8 @@ SCHEMA_STATEMENTS = (
         year INTEGER NOT NULL,
         avg_commute_minutes REAL NOT NULL,
         cross_district_ratio REAL NOT NULL,
+        metro_coverage_rate REAL NOT NULL DEFAULT 0,
+        employment_density REAL NOT NULL DEFAULT 0,
         PRIMARY KEY (district, year)
     )
     """,
@@ -158,6 +168,28 @@ SCHEMA_STATEMENTS = (
 )
 
 
+COLUMN_MIGRATIONS = {
+    "house_price_monthly": (
+        "ALTER TABLE house_price_monthly ADD COLUMN rent_price INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE house_price_monthly ADD COLUMN listing_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE house_price_monthly ADD COLUMN vacancy_rate REAL NOT NULL DEFAULT 0",
+    ),
+    "housing_transactions": (
+        "ALTER TABLE housing_transactions ADD COLUMN new_house_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE housing_transactions ADD COLUMN second_hand_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE housing_transactions ADD COLUMN avg_transaction_price INTEGER NOT NULL DEFAULT 0",
+    ),
+    "district_population": (
+        "ALTER TABLE district_population ADD COLUMN median_income INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE district_population ADD COLUMN household_count REAL NOT NULL DEFAULT 0",
+    ),
+    "commuting_metrics": (
+        "ALTER TABLE commuting_metrics ADD COLUMN metro_coverage_rate REAL NOT NULL DEFAULT 0",
+        "ALTER TABLE commuting_metrics ADD COLUMN employment_density REAL NOT NULL DEFAULT 0",
+    ),
+}
+
+
 DISTRICTS = (
     ("东城区", 105000, 3200, 210.1, 31.2, 0.43),
     ("西城区", 120000, 2900, 110.0, 32.5, 0.39),
@@ -191,6 +223,15 @@ def create_schema(engine: Engine) -> None:
     with engine.begin() as connection:
         for statement in SCHEMA_STATEMENTS:
             connection.execute(text(statement))
+        for table, statements in COLUMN_MIGRATIONS.items():
+            existing = {
+                row["name"]
+                for row in connection.execute(text(f"PRAGMA table_info({table})")).mappings()
+            }
+            for statement in statements:
+                column = statement.split(" ADD COLUMN ", 1)[1].split(" ", 1)[0]
+                if column not in existing:
+                    connection.execute(text(statement))
 
 
 def _months() -> Iterable[tuple[int, int, int]]:
@@ -219,16 +260,23 @@ def seed_all(engine: Engine) -> None:
                     "district": district,
                     "month": month_key,
                     "avg_price": base_price + offset * (90 + district_index * 15) + ((month % 4) - 2) * 120,
+                    "rent_price": round((base_price / 1000) + 28 + district_index * 2.6 + offset * 0.15),
+                    "listing_count": 420 + district_index * 95 + ((month * 31 + offset * 11) % 260),
+                    "vacancy_rate": round(2.1 + district_index * 0.18 + ((month + offset) % 4) * 0.11, 2),
                     "mom_change": round(0.18 + ((month + district_index) % 5) * 0.07, 2),
                     "yoy_change": round(1.4 + district_index * 0.22 + (offset // 12) * 0.35, 2),
                 }
             )
+            transaction_count = base_transactions + ((month * 137 + offset * 23 + district_index * 89) % 900)
             transaction_rows.append(
                 {
                     "district": district,
                     "month": month_key,
-                    "transaction_count": base_transactions + ((month * 137 + offset * 23 + district_index * 89) % 900),
+                    "transaction_count": transaction_count,
                     "transaction_area": round((base_transactions + month * 41 + offset * 9) * (82.0 + district_index * 2.5), 1),
+                    "new_house_count": round(transaction_count * (0.28 + district_index * 0.015)),
+                    "second_hand_count": transaction_count - round(transaction_count * (0.28 + district_index * 0.015)),
+                    "avg_transaction_price": base_price + offset * (76 + district_index * 12) - 900 + month * 18,
                 }
             )
 
@@ -239,6 +287,8 @@ def seed_all(engine: Engine) -> None:
                     "year": year,
                     "resident_population": round(base_population * (1 + year_offset * (0.002 + district_index * 0.0007)), 2),
                     "growth_rate": round(0.2 + district_index * 0.07 + year_offset * 0.05, 2),
+                    "median_income": 118000 + district_index * 7600 + year_offset * 4200,
+                    "household_count": round(base_population * (0.38 + district_index * 0.012), 2),
                 }
             )
             commuting_rows.append(
@@ -247,6 +297,8 @@ def seed_all(engine: Engine) -> None:
                     "year": year,
                     "avg_commute_minutes": round(base_commute - year_offset * 0.3, 1),
                     "cross_district_ratio": round(base_cross_ratio - year_offset * 0.004, 3),
+                    "metro_coverage_rate": round(0.82 - district_index * 0.045 + year_offset * 0.012, 3),
+                    "employment_density": round(1.8 + district_index * 0.42 + year_offset * 0.08, 2),
                 }
             )
 
@@ -254,9 +306,9 @@ def seed_all(engine: Engine) -> None:
         connection.execute(
             text(
                 """
-                INSERT OR IGNORE INTO house_price_monthly
-                    (district, month, avg_price, mom_change, yoy_change)
-                VALUES (:district, :month, :avg_price, :mom_change, :yoy_change)
+                INSERT OR REPLACE INTO house_price_monthly
+                    (district, month, avg_price, rent_price, listing_count, vacancy_rate, mom_change, yoy_change)
+                VALUES (:district, :month, :avg_price, :rent_price, :listing_count, :vacancy_rate, :mom_change, :yoy_change)
                 """
             ),
             price_rows,
@@ -264,9 +316,9 @@ def seed_all(engine: Engine) -> None:
         connection.execute(
             text(
                 """
-                INSERT OR IGNORE INTO housing_transactions
-                    (district, month, transaction_count, transaction_area)
-                VALUES (:district, :month, :transaction_count, :transaction_area)
+                INSERT OR REPLACE INTO housing_transactions
+                    (district, month, transaction_count, transaction_area, new_house_count, second_hand_count, avg_transaction_price)
+                VALUES (:district, :month, :transaction_count, :transaction_area, :new_house_count, :second_hand_count, :avg_transaction_price)
                 """
             ),
             transaction_rows,
@@ -274,9 +326,9 @@ def seed_all(engine: Engine) -> None:
         connection.execute(
             text(
                 """
-                INSERT OR IGNORE INTO district_population
-                    (district, year, resident_population, growth_rate)
-                VALUES (:district, :year, :resident_population, :growth_rate)
+                INSERT OR REPLACE INTO district_population
+                    (district, year, resident_population, growth_rate, median_income, household_count)
+                VALUES (:district, :year, :resident_population, :growth_rate, :median_income, :household_count)
                 """
             ),
             population_rows,
@@ -284,9 +336,9 @@ def seed_all(engine: Engine) -> None:
         connection.execute(
             text(
                 """
-                INSERT OR IGNORE INTO commuting_metrics
-                    (district, year, avg_commute_minutes, cross_district_ratio)
-                VALUES (:district, :year, :avg_commute_minutes, :cross_district_ratio)
+                INSERT OR REPLACE INTO commuting_metrics
+                    (district, year, avg_commute_minutes, cross_district_ratio, metro_coverage_rate, employment_density)
+                VALUES (:district, :year, :avg_commute_minutes, :cross_district_ratio, :metro_coverage_rate, :employment_density)
                 """
             ),
             commuting_rows,

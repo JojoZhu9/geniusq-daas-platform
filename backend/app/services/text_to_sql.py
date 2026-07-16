@@ -107,10 +107,10 @@ class DeepSeekTextToSqlService:
         return "\n".join(
             [
                 "可用数据表：",
-                "house_price_monthly(district, month, avg_price, mom_change, yoy_change)",
-                "housing_transactions(district, month, transaction_count, transaction_area)",
-                "district_population(district, year, resident_population, growth_rate)",
-                "commuting_metrics(district, year, avg_commute_minutes, cross_district_ratio)",
+                "house_price_monthly(district, month, avg_price, rent_price, listing_count, vacancy_rate, mom_change, yoy_change)",
+                "housing_transactions(district, month, transaction_count, transaction_area, new_house_count, second_hand_count, avg_transaction_price)",
+                "district_population(district, year, resident_population, growth_rate, median_income, household_count)",
+                "commuting_metrics(district, year, avg_commute_minutes, cross_district_ratio, metro_coverage_rate, employment_density)",
                 "",
                 "检索到的知识：",
                 "\n".join(knowledge_lines) or "无",

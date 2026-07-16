@@ -16,6 +16,15 @@ DOMAIN_TERMS = {
     "成交": ["housing_transactions", "transaction_count", "transaction_area"],
     "人口": ["district_population", "resident_population", "growth_rate"],
     "通勤": ["commuting_metrics", "avg_commute_minutes", "cross_district_ratio"],
+    "租金": ["house_price_monthly", "rent_price"],
+    "挂牌": ["house_price_monthly", "listing_count"],
+    "空置率": ["house_price_monthly", "vacancy_rate"],
+    "新房": ["housing_transactions", "new_house_count"],
+    "二手房": ["housing_transactions", "second_hand_count"],
+    "收入": ["district_population", "median_income"],
+    "家庭": ["district_population", "household_count"],
+    "地铁": ["commuting_metrics", "metro_coverage_rate"],
+    "就业": ["commuting_metrics", "employment_density"],
 }
 
 
