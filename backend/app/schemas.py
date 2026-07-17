@@ -15,6 +15,13 @@ class AnalysisStep(BaseModel):
     title: str
     detail: str
     status: Literal["pending", "running", "completed", "failed"] = "completed"
+    tool: Optional[str] = None
+    tool_label: Optional[str] = None
+    input_summary: List[str] = Field(default_factory=list)
+    output_summary: List[str] = Field(default_factory=list)
+    input: Optional[dict[str, Any]] = None
+    output: Optional[dict[str, Any]] = None
+    error: Optional[str] = None
 
 
 class PlannedQuery(BaseModel):
@@ -23,10 +30,15 @@ class PlannedQuery(BaseModel):
 
 
 class ChartSpec(BaseModel):
-    type: Literal["line", "bar", "pie", "table"]
+    type: Literal["line", "bar", "pie", "table", "scatter", "stacked_bar"]
     x_field: str
     y_fields: List[str]
     title: str
+    x_axis_name: Optional[str] = None
+    y_axis_name: Optional[str] = None
+    unit: Optional[str] = None
+    series_mode: Optional[str] = None
+    recommended_reason: Optional[str] = None
 
 
 class AnalysisPlan(BaseModel):
@@ -59,6 +71,18 @@ class RetrievedKnowledge(BaseModel):
     content: str
     linked_tables: List[str]
     score: float
+
+
+class SemanticMetric(BaseModel):
+    id: str
+    name: str
+    aliases: List[str]
+    description: str
+    formula: str
+    fields: List[str]
+    tables: List[str]
+    dimensions: List[str] = Field(default_factory=list)
+    score: float = 0
 
 
 class TextToSqlResult(BaseModel):

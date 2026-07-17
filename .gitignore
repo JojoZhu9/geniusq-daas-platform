@@ -7,9 +7,15 @@ __pycache__/
 *.egg-info/
 node_modules/
 dist/
-daas_demo.db
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+backend/runtime/*
+!backend/runtime/.gitkeep
 .env
 .env.local
 test-results/
 playwright-report/
-playwright-*.db

@@ -40,7 +40,10 @@ def test_settings_default_to_offline_local_database():
 
     settings = Settings(_env_file=None)
 
-    assert settings.database_url == "sqlite:///./daas_demo.db"
+    normalized_database_url = settings.database_url.replace("\\", "/")
+
+    assert normalized_database_url.startswith("sqlite:///")
+    assert normalized_database_url.endswith("/backend/runtime/daas_demo.db")
     assert settings.llm_mode == "offline"
     assert settings.query_row_limit == 500
 

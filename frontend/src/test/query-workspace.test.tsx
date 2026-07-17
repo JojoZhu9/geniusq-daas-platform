@@ -3,7 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, vi } from "vitest";
-import { QueryWorkspace } from "../pages/QueryWorkspace";
+import { ThinkingTimeline } from "../components/ThinkingTimeline";
+import { QueryWorkspace, liveThinkingSteps } from "../pages/QueryWorkspace";
 
 const completedAnalysis = {
   status: "completed",
@@ -61,6 +62,43 @@ function renderWorkspace() {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+});
+
+test("live thinking reveals only completed steps plus the active tool step", () => {
+  expect(liveThinkingSteps(0).map((step) => step.status)).toEqual(["running"]);
+  expect(liveThinkingSteps(1).map((step) => step.status)).toEqual(["completed", "running"]);
+  expect(liveThinkingSteps(3).map((step) => step.status)).toEqual([
+    "completed",
+    "completed",
+    "completed",
+    "running"
+  ]);
+});
+
+test("renders called tool without input and output summaries in the thinking timeline", () => {
+  render(
+    <ThinkingTimeline
+      steps={[{
+        key: "select_schema",
+        title: "Select tables and fields",
+        detail: "Choose the minimum schema needed for the question.",
+        status: "completed",
+        tool: "schema_selector",
+        tool_label: "数据表字段选择器",
+        input_summary: ["读取用户问题中的年份、区域和指标"],
+        output_summary: ["选择 house_price_monthly 表", "使用 district、avg_price 字段"],
+        input: { question: "2025 district price analysis" },
+        output: { tables: ["house_price_monthly"], fields: ["district", "avg_price"] }
+      }]}
+    />
+  );
+
+  expect(screen.getByText("调用工具")).toBeVisible();
+  expect(screen.getByText("数据表字段选择器")).toBeVisible();
+  expect(screen.queryByText("输入摘要")).not.toBeInTheDocument();
+  expect(screen.queryByText("输出摘要")).not.toBeInTheDocument();
+  expect(screen.queryByText("选择 house_price_monthly 表")).not.toBeInTheDocument();
+  expect(screen.queryByText("schema_selector")).not.toBeInTheDocument();
 });
 
 test("configures deepseek api key from the workspace", async () => {

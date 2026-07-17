@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { api, ApiClientError } from "../api/client";
 import { AnalysisChart } from "../components/AnalysisChart";
 import { DataSourcePanel } from "../components/DataSourcePanel";
@@ -26,10 +27,21 @@ const LIVE_STEPS = [
   { key: "execute_and_visualize", title: "执行查询并生成图表建议", detail: "正在查询本地 SQLite，并准备图表和洞察结果…" },
 ] as const;
 
-function liveThinkingSteps(activeIndex: number) {
-  return LIVE_STEPS.map((step, index) => ({
+const LIVE_STEP_TOOLS: Record<string, string> = {
+  understand_question: "问题理解器",
+  merge_context: "会话上下文管理器",
+  retrieve_knowledge: "知识库检索工具",
+  select_tables_fields: "数据表字段选择器",
+  deepseek_text_to_sql: "DeepSeek SQL 生成工具",
+  validate_sql: "只读 SQL 安全校验器",
+  execute_and_visualize: "SQLite 查询与图表工具",
+};
+
+export function liveThinkingSteps(activeIndex: number) {
+  return LIVE_STEPS.slice(0, Math.min(activeIndex + 1, LIVE_STEPS.length)).map((step, index) => ({
     ...step,
-    status: index < activeIndex ? "completed" : index === activeIndex ? "running" : "pending"
+    tool_label: LIVE_STEP_TOOLS[step.key],
+    status: index < activeIndex ? "completed" : "running"
   } as const));
 }
 
@@ -53,6 +65,7 @@ function nextDashboardCardLayout(cards: Dashboard["cards"]) {
 }
 
 export function QueryWorkspace() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [conversationId, setConversationId] = useState("");
   const [question, setQuestion] = useState("");
   const [history, setHistory] = useState<Exchange[]>([]);
@@ -81,6 +94,13 @@ export function QueryWorkspace() {
       })
       .catch(() => setModelSettings(null));
   }, []);
+
+  useEffect(() => {
+    const suggestedQuestion = searchParams.get("question");
+    if (!suggestedQuestion) return;
+    setQuestion(suggestedQuestion);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const askMutation = useMutation({
     mutationFn: (nextQuestion: string) => api.post<AnalysisResponse>("/api/chat", {
@@ -282,6 +302,16 @@ export function QueryWorkspace() {
                                 <span key={item.id}>
                                   {item.title}
                                   <small>{item.scope === "private" ? "私有" : "公开"} · {item.kind}</small>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {!!exchange.response.metadata.used_metrics?.length && (
+                            <div className="knowledge-chips semantic-chips" aria-label="命中指标口径">
+                              {exchange.response.metadata.used_metrics.map((item) => (
+                                <span key={item.id}>
+                                  {item.name}
+                                  <small>{item.formula}</small>
                                 </span>
                               ))}
                             </div>

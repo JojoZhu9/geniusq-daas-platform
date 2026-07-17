@@ -53,3 +53,36 @@ test("keeps table rows visible after switching away from ECharts", async () => {
   expect(table).toHaveTextContent("avg_price");
   expect(table).toHaveTextContent("100000");
 });
+
+test("renders pie, scatter, and stacked bar chart types", async () => {
+  const richChart: ChartSpec = {
+    ...chart,
+    type: "pie",
+    x_field: "district",
+    y_fields: ["avg_price", "rent_price"],
+    title: "Chart type upgrade"
+  };
+  const richDatasets: Dataset[] = [{
+    ...datasets[0],
+    fields: ["district", "avg_price", "rent_price"],
+    rows: [
+      { district: "A", avg_price: 100, rent_price: 10 },
+      { district: "B", avg_price: 80, rent_price: 8 }
+    ]
+  }];
+  render(<AnalysisChart chart={richChart} datasets={richDatasets} />);
+
+  const pieView = await screen.findByRole("img", { name: "Chart type upgrade，饼图" });
+  await waitFor(() => expect(pieView.querySelector("svg")).not.toBeNull());
+  expect(pieView).toHaveAttribute("data-chart-type", "pie");
+
+  await userEvent.click(screen.getByRole("button", { name: "散点" }));
+  const scatterView = await screen.findByRole("img", { name: "Chart type upgrade，散点图" });
+  await waitFor(() => expect(scatterView.querySelector("svg")).not.toBeNull());
+  expect(scatterView).toHaveAttribute("data-chart-type", "scatter");
+
+  await userEvent.click(screen.getByRole("button", { name: "堆叠" }));
+  const stackedView = await screen.findByRole("img", { name: "Chart type upgrade，堆叠柱状图" });
+  await waitFor(() => expect(stackedView.querySelector("svg")).not.toBeNull());
+  expect(stackedView).toHaveAttribute("data-chart-type", "stacked_bar");
+});

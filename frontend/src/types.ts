@@ -10,14 +10,26 @@ export type AnalysisStep = {
   title: string;
   detail: string;
   status: "pending" | "running" | "completed" | "failed";
+  tool?: string | null;
+  tool_label?: string | null;
+  input_summary?: string[];
+  output_summary?: string[];
+  input?: Record<string, unknown> | null;
+  output?: Record<string, unknown> | null;
+  error?: string | null;
 };
 
 export type PlannedQuery = { source: string; sql: string };
 export type ChartSpec = {
-  type: "line" | "bar" | "pie" | "table";
+  type: "line" | "bar" | "pie" | "table" | "scatter" | "stacked_bar";
   x_field: string;
   y_fields: string[];
   title: string;
+  x_axis_name?: string | null;
+  y_axis_name?: string | null;
+  unit?: string | null;
+  series_mode?: string | null;
+  recommended_reason?: string | null;
 };
 export type Dataset = {
   source: string;
@@ -54,6 +66,14 @@ export type AnalysisResponse = {
       scope: string;
       linked_tables: string[];
       score: number;
+    }[];
+    used_metrics?: {
+      id: string;
+      name: string;
+      formula: string;
+      fields: string[];
+      tables: string[];
+      description: string;
     }[];
     [key: string]: unknown;
   };
@@ -102,4 +122,52 @@ export type Requirement = {
   module: string;
   priority: string;
   status: string;
+};
+
+export type DataSourceOverview = {
+  database: {
+    engine: string;
+    url: string;
+  };
+  table_count: number;
+  column_count: number;
+  row_count: number;
+  business_tables: string[];
+};
+
+export type DataSourceTable = {
+  name: string;
+  title: string;
+  description: string;
+  row_count: number;
+  column_count: number;
+};
+
+export type DataSourceColumn = {
+  name: string;
+  type: string;
+  label: string;
+  role: string;
+  is_primary_key: boolean;
+  sample_value: string | number | null;
+};
+
+export type DataSourceTableDetail = DataSourceTable & {
+  columns: DataSourceColumn[];
+  sample_rows: Record<string, string | number | null>[];
+  suggested_questions: string[];
+};
+
+export type ModelSettings = {
+  llm_mode: string;
+  deepseek_base_url: string;
+  deepseek_model: string;
+  deepseek_api_key_configured: boolean;
+  deepseek_api_key_masked?: string;
+};
+
+export type DeepSeekConnectionTest = {
+  ok: boolean;
+  mode: string;
+  message: string;
 };
