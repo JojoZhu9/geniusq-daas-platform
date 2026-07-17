@@ -349,6 +349,11 @@ button { border: 0; }
   background: #f6fbff;
   font-size: 12px;
 }
+.question-chip:hover {
+  border-color: #80bdf2;
+  color: #0878df;
+  background: #eef7ff;
+}
 .settings-grid {
   grid-template-columns: minmax(320px, .8fr) minmax(420px, 1fr);
   align-items: start;

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { api, ApiClientError } from "../api/client";
 import { AnalysisChart } from "../components/AnalysisChart";
 import { DataSourcePanel } from "../components/DataSourcePanel";
@@ -64,6 +65,7 @@ function nextDashboardCardLayout(cards: Dashboard["cards"]) {
 }
 
 export function QueryWorkspace() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [conversationId, setConversationId] = useState("");
   const [question, setQuestion] = useState("");
   const [history, setHistory] = useState<Exchange[]>([]);
@@ -92,6 +94,13 @@ export function QueryWorkspace() {
       })
       .catch(() => setModelSettings(null));
   }, []);
+
+  useEffect(() => {
+    const suggestedQuestion = searchParams.get("question");
+    if (!suggestedQuestion) return;
+    setQuestion(suggestedQuestion);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const askMutation = useMutation({
     mutationFn: (nextQuestion: string) => api.post<AnalysisResponse>("/api/chat", {

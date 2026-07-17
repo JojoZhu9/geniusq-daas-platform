@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { DataSourceOverview, DataSourceTable, DataSourceTableDetail } from "../types";
 
@@ -8,6 +9,7 @@ function formatValue(value: string | number | null | undefined) {
 }
 
 export function DataSourceWorkspace() {
+  const navigate = useNavigate();
   const [overview, setOverview] = useState<DataSourceOverview | null>(null);
   const [tables, setTables] = useState<DataSourceTable[]>([]);
   const [selectedName, setSelectedName] = useState("");
@@ -153,7 +155,14 @@ export function DataSourceWorkspace() {
               <h3>这张表可以这样问</h3>
               <div className="suggestion-row">
                 {detail.suggested_questions.map((question) => (
-                  <span className="question-chip" key={question}>{question}</span>
+                  <button
+                    className="question-chip"
+                    key={question}
+                    type="button"
+                    onClick={() => navigate(`/query?question=${encodeURIComponent(question)}`)}
+                  >
+                    {question}
+                  </button>
                 ))}
               </div>
             </>

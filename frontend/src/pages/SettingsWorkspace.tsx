@@ -8,6 +8,7 @@ export function SettingsWorkspace() {
   const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com");
   const [model, setModel] = useState("deepseek-chat");
   const [notice, setNotice] = useState("");
+  const [noticeKind, setNoticeKind] = useState<"success" | "error">("success");
   const [testing, setTesting] = useState(false);
 
   async function load() {
@@ -28,6 +29,7 @@ export function SettingsWorkspace() {
     });
     setSettings(updated);
     setApiKey("");
+    setNoticeKind("success");
     setNotice("DeepSeek 配置已更新，后续问数会优先使用在线模型。");
   }
 
@@ -35,6 +37,7 @@ export function SettingsWorkspace() {
     setTesting(true);
     try {
       const result = await api.post<DeepSeekConnectionTest>("/api/model-settings/deepseek/test");
+      setNoticeKind(result.ok ? "success" : "error");
       setNotice(result.message);
     } finally {
       setTesting(false);
@@ -52,7 +55,7 @@ export function SettingsWorkspace() {
         </div>
       </div>
 
-      {notice && <div className="inline-alert">{notice}</div>}
+      {notice && <div className={noticeKind === "error" ? "inline-alert error" : "inline-alert"}>{notice}</div>}
 
       <div className="settings-grid">
         <article className="panel settings-status-card">

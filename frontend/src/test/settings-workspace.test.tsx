@@ -33,3 +33,19 @@ test("renders masked DeepSeek configuration and tests connection", async () => {
   await userEvent.click(screen.getByRole("button", { name: "测试连接" }));
   expect(await screen.findByText("DeepSeek 连接测试成功。")).toBeVisible();
 });
+
+test("shows failed DeepSeek connection as an error instead of success notice", async () => {
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/model-settings" && !init?.method) return json(settings);
+    if (path === "/api/model-settings/deepseek/test" && init?.method === "POST") {
+      return json({ ok: false, mode: "deepseek", message: "DeepSeek 连接测试失败：网络连接失败，请稍后重试。" });
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  }));
+
+  renderWorkspace(<SettingsWorkspace />);
+
+  await userEvent.click(await screen.findByRole("button", { name: "测试连接" }));
+  expect(await screen.findByText("DeepSeek 连接测试失败：网络连接失败，请稍后重试。")).toHaveClass("error");
+});

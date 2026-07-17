@@ -1,6 +1,7 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, vi } from "vitest";
+import { Route, Routes } from "react-router-dom";
 import { DataSourceWorkspace } from "../pages/DataSourceWorkspace";
 import { json, renderWorkspace } from "./workspace-test-utils";
 
@@ -50,14 +51,20 @@ test("renders datasource overview table detail and suggested questions", async (
     throw new Error(`Unexpected request: ${path}`);
   }));
 
-  renderWorkspace(<DataSourceWorkspace />);
+  renderWorkspace(
+    <Routes>
+      <Route path="/" element={<DataSourceWorkspace />} />
+      <Route path="/query" element={<div>问数页面</div>} />
+    </Routes>
+  );
 
   expect(await screen.findByText("数据源管理")).toBeVisible();
   expect(screen.getByText("SQLite")).toBeVisible();
   expect(screen.getByText("house_price_monthly")).toBeVisible();
   expect(await screen.findByText("平均房价")).toBeVisible();
-  expect(screen.getByText("2025年各区平均房价趋势如何？")).toBeVisible();
-
   await userEvent.click(screen.getByRole("button", { name: /housing_transactions/ }));
   expect(fetch).toHaveBeenCalledWith("/api/datasource/tables/housing_transactions", expect.anything());
+
+  await userEvent.click(screen.getByRole("button", { name: "2025年各区平均房价趋势如何？" }));
+  expect(await screen.findByText("问数页面")).toBeVisible();
 });
