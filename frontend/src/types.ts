@@ -123,3 +123,51 @@ export type Requirement = {
   priority: string;
   status: string;
 };
+
+export type DataSourceOverview = {
+  database: {
+    engine: string;
+    url: string;
+  };
+  table_count: number;
+  column_count: number;
+  row_count: number;
+  business_tables: string[];
+};
+
+export type DataSourceTable = {
+  name: string;
+  title: string;
+  description: string;
+  row_count: number;
+  column_count: number;
+};
+
+export type DataSourceColumn = {
+  name: string;
+  type: string;
+  label: string;
+  role: string;
+  is_primary_key: boolean;
+  sample_value: string | number | null;
+};
+
+export type DataSourceTableDetail = DataSourceTable & {
+  columns: DataSourceColumn[];
+  sample_rows: Record<string, string | number | null>[];
+  suggested_questions: string[];
+};
+
+export type ModelSettings = {
+  llm_mode: string;
+  deepseek_base_url: string;
+  deepseek_model: string;
+  deepseek_api_key_configured: boolean;
+  deepseek_api_key_masked?: string;
+};
+
+export type DeepSeekConnectionTest = {
+  ok: boolean;
+  mode: string;
+  message: string;
+};

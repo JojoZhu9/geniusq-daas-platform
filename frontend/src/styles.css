@@ -218,6 +218,218 @@ button { border: 0; }
 .source-card dt, .source-card dd { margin: 0; font-size: 9px; }
 .source-card dt { color: #8a98a8; }
 .source-card dd { overflow: hidden; color: #53677d; text-overflow: ellipsis; white-space: nowrap; }
+
+.datasource-overview-grid,
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.metric-card {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+}
+.metric-card small,
+.settings-list dt {
+  color: #7d8fa2;
+  font-size: 11px;
+}
+.metric-card strong {
+  color: #1d3349;
+  font-size: 23px;
+}
+.metric-card span {
+  color: #60758a;
+  font-size: 12px;
+}
+.datasource-layout {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.datasource-table-list {
+  position: sticky;
+  top: 70px;
+  overflow: hidden;
+}
+.datasource-table-button {
+  display: grid;
+  gap: 5px;
+  width: calc(100% - 24px);
+  margin: 10px 12px;
+  padding: 12px;
+  border: 1px solid #e0e8f0;
+  border-radius: 8px;
+  color: #40566d;
+  background: #fbfdff;
+  text-align: left;
+}
+.datasource-table-button strong {
+  color: #1d3349;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+.datasource-table-button span {
+  color: #7b8da0;
+  font-size: 11px;
+}
+.datasource-table-button.is-active {
+  border-color: #8fc7f8;
+  background: #eef7ff;
+  box-shadow: inset 3px 0 0 #0878df;
+}
+.datasource-detail {
+  padding-bottom: 16px;
+  overflow: hidden;
+}
+.datasource-detail .panel-header {
+  min-height: 86px;
+  align-items: center;
+}
+.datasource-detail .panel-header p {
+  margin: 6px 0 0;
+  color: #63788d;
+  font-size: 12px;
+}
+.datasource-detail h3 {
+  margin: 18px 16px 10px;
+  color: #273c52;
+  font-size: 14px;
+}
+.datasource-column-table,
+.datasource-sample-table {
+  margin: 0 16px;
+  overflow: auto;
+  border: 1px solid #e4ebf2;
+  border-radius: 8px;
+}
+.datasource-column-table table,
+.datasource-sample-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.datasource-column-table th,
+.datasource-column-table td,
+.datasource-sample-table th,
+.datasource-sample-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #edf2f6;
+  text-align: left;
+  white-space: nowrap;
+}
+.datasource-column-table th,
+.datasource-sample-table th {
+  color: #526a82;
+  background: #f6f9fc;
+}
+.pk-chip {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  color: #0d73c9;
+  background: #e6f3ff;
+  font-size: 9px;
+}
+.suggestion-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 16px;
+}
+.question-chip {
+  padding: 8px 10px;
+  border: 1px solid #d9e7f5;
+  border-radius: 999px;
+  color: #2b638f;
+  background: #f6fbff;
+  font-size: 12px;
+}
+.settings-grid {
+  grid-template-columns: minmax(320px, .8fr) minmax(420px, 1fr);
+  align-items: start;
+}
+.settings-status-card,
+.settings-form {
+  padding-bottom: 16px;
+}
+.settings-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 16px;
+}
+.settings-list div {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 10px;
+}
+.settings-list dd {
+  margin: 0;
+  color: #30475f;
+  word-break: break-all;
+}
+.settings-status-card .secondary-button {
+  margin-left: 16px;
+}
+.mode-pill {
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.mode-pill.online {
+  color: #0878df;
+  background: #e9f5ff;
+}
+.mode-pill.offline {
+  color: #65778b;
+  background: #edf1f5;
+}
+.settings-form {
+  display: grid;
+  gap: 12px;
+}
+.settings-form .panel-header {
+  min-height: 86px;
+}
+.settings-form .panel-header p {
+  margin: 5px 0 0;
+  color: #6b7f93;
+  font-size: 12px;
+}
+.settings-form label {
+  display: grid;
+  gap: 6px;
+  margin: 0 16px;
+  color: #50677f;
+  font-size: 12px;
+}
+.settings-form input {
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid #d8e2ec;
+  border-radius: 6px;
+  outline: none;
+  color: #2c4056;
+  background: #fff;
+}
+.settings-form input:focus {
+  border-color: #5ca8e9;
+  box-shadow: 0 0 0 3px rgba(8,120,223,.09);
+}
+.settings-form .primary-button {
+  justify-self: start;
+  margin-left: 16px;
+}
+.settings-note {
+  margin: 0 16px;
+  color: #7a8b9d;
+  font-size: 11px;
+}
 .sql-card { margin: 12px; overflow: hidden; border: 1px solid #263747; border-radius: 5px; background: #17232f; }
 .sql-toolbar { padding: 7px 9px; color: #b8c5d2; background: #22313f; font-size: 9px; }
 .sql-toolbar button { color: #77bcf8; background: transparent; font-size: 9px; }

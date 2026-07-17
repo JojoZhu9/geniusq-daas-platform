@@ -8,12 +8,12 @@ def test_model_settings_hide_api_key_and_default_to_offline():
     response = TestClient(app).get("/api/model-settings")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "llm_mode": "offline",
-        "deepseek_base_url": "https://api.deepseek.com",
-        "deepseek_model": "deepseek-v4-flash",
-        "deepseek_api_key_configured": False,
-    }
+    payload = response.json()
+    assert payload["llm_mode"] == "offline"
+    assert payload["deepseek_base_url"] == "https://api.deepseek.com"
+    assert payload["deepseek_model"] == "deepseek-v4-flash"
+    assert payload["deepseek_api_key_configured"] is False
+    assert payload["deepseek_api_key_masked"] == ""
 
 
 def test_runtime_deepseek_settings_are_applied_without_echoing_secret(monkeypatch):
@@ -27,12 +27,12 @@ def test_runtime_deepseek_settings_are_applied_without_echoing_secret(monkeypatc
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "llm_mode": "deepseek",
-        "deepseek_base_url": "https://api.deepseek.com",
-        "deepseek_model": "deepseek-v4-flash",
-        "deepseek_api_key_configured": True,
-    }
+    payload = response.json()
+    assert payload["llm_mode"] == "deepseek"
+    assert payload["deepseek_base_url"] == "https://api.deepseek.com"
+    assert payload["deepseek_model"] == "deepseek-v4-flash"
+    assert payload["deepseek_api_key_configured"] is True
+    assert payload["deepseek_api_key_masked"] == "sk-****cret"
     assert "sk-test-secret" not in response.text
     assert get_settings().llm_mode == "deepseek"
 

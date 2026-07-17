@@ -1,17 +1,15 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { api } from "../api/client";
+import type { ModelSettings } from "../types";
 
 const workspaceLinks = [
   { to: "/query", icon: "✦", label: "智能问数" },
+  { to: "/datasource", icon: "▦", label: "数据源管理" },
   { to: "/knowledge", icon: "▤", label: "知识库管理" },
-  { to: "/dashboards", icon: "▦", label: "我的仪表盘" }
+  { to: "/dashboards", icon: "▣", label: "我的仪表盘" },
+  { to: "/settings", icon: "⚙", label: "运行配置" }
 ];
-
-type ModelSettings = {
-  llm_mode: string;
-  deepseek_api_key_configured: boolean;
-};
 
 function modeText(settings: ModelSettings | null) {
   if (!settings) return "模型模式检测中";
@@ -29,7 +27,13 @@ export function PlatformShell() {
   useEffect(() => {
     api.get<ModelSettings>("/api/model-settings")
       .then(setSettings)
-      .catch(() => setSettings({ llm_mode: "offline", deepseek_api_key_configured: false }));
+      .catch(() => setSettings({
+        llm_mode: "offline",
+        deepseek_base_url: "",
+        deepseek_model: "",
+        deepseek_api_key_configured: false,
+        deepseek_api_key_masked: ""
+      }));
   }, []);
 
   return (
