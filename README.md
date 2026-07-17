@@ -161,7 +161,7 @@ npm.cmd run build
 
 - 页面提示后端不可用：先访问 `/api/health`，确认后端是否启动。
 - 图表为空或字段不匹配：当前版本后端会自动校验并修复图表字段；如仍出现问题，可刷新页面或重新提问。
-- 想重置演示数据：停止服务后删除根目录 `daas_demo.db`，再次启动会自动重建。
+- 想重置演示数据：停止服务后删除 `backend/runtime/daas_demo.db`，再次启动会自动重建。
 - DeepSeek 不生效：检查页面配置或 `.env` 中的 `LLM_MODE`、`DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL` 和 `DEEPSEEK_MODEL`。
 
 ## English
@@ -323,5 +323,5 @@ Current validation result:
 
 - Backend unavailable: open `/api/health` and confirm the service is running.
 - Empty or mismatched charts: the current backend validates and repairs chart fields automatically; refresh or ask again if needed.
-- Reset demo data: stop services, delete `daas_demo.db` in the repository root, and restart.
+- Reset demo data: stop services, delete `backend/runtime/daas_demo.db`, and restart.
 - DeepSeek not active: check the UI configuration or `.env` values for `LLM_MODE`, `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, and `DEEPSEEK_MODEL`.
