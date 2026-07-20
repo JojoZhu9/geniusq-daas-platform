@@ -50,6 +50,12 @@ const twoColumnDashboard = {
 
 beforeEach(() => vi.restoreAllMocks());
 
+test("dashboard workspace can be imported from the split page module", async () => {
+  const module = await import("../pages/dashboard/DashboardWorkspace");
+
+  expect(module.DashboardWorkspace).toBe(DashboardWorkspace);
+});
+
 test("creates a dashboard with a custom name", async () => {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);

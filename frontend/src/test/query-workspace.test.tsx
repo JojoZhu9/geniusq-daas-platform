@@ -75,6 +75,14 @@ test("live thinking reveals only completed steps plus the active tool step", () 
   ]);
 });
 
+test("query workspace can be imported from the split page module", async () => {
+  const module = await import("../pages/query/QueryWorkspace");
+  const utils = await import("../pages/query/queryUtils");
+
+  expect(module.QueryWorkspace).toBe(QueryWorkspace);
+  expect(utils.liveThinkingSteps(0)[0].title).toBe("理解用户问题");
+});
+
 test("renders called tool without input and output summaries in the thinking timeline", () => {
   render(
     <ThinkingTimeline
