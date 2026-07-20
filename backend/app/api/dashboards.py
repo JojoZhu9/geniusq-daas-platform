@@ -12,6 +12,7 @@ from app.services.dashboards import (
     get_dashboard_by_share,
     list_dashboards,
     remove_card,
+    rename_dashboard,
     update_layout,
 )
 
@@ -70,6 +71,18 @@ def dashboard_share(share_id: str, session: Session = Depends(get_session)):
 @router.get("/dashboards/{dashboard_id}")
 def dashboard_detail(dashboard_id: str, session: Session = Depends(get_session)):
     dashboard = get_dashboard(session, dashboard_id)
+    if dashboard is None:
+        raise _missing()
+    return dashboard
+
+
+@router.patch("/dashboards/{dashboard_id}")
+def dashboard_rename(
+    dashboard_id: str,
+    payload: DashboardInput,
+    session: Session = Depends(get_session),
+):
+    dashboard = rename_dashboard(session, dashboard_id, payload.name.strip())
     if dashboard is None:
         raise _missing()
     return dashboard

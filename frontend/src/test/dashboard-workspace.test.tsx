@@ -87,6 +87,37 @@ test("creates a dashboard with a custom name", async () => {
   expect(JSON.parse(String(request?.[1]?.body))).toEqual({ name: "2025区域成交看板" });
 });
 
+test("renames the selected dashboard", async () => {
+  let current = dashboard;
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([current]);
+    if (path === "/api/dashboards/d1" && init?.method === "PATCH") {
+      current = { ...current, name: JSON.parse(String(init.body)).name };
+      return json(current);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace(<DashboardWorkspace />);
+  await screen.findByRole("heading", { name: "房价分析看板" });
+  await userEvent.click(screen.getByRole("button", { name: "重命名仪表盘" }));
+  await userEvent.clear(screen.getByLabelText("新仪表盘名称"));
+  await userEvent.type(screen.getByLabelText("新仪表盘名称"), "2025区域成交看板");
+  await userEvent.click(screen.getByRole("button", { name: "保存名称" }));
+
+  expect(await screen.findByRole("heading", { name: "2025区域成交看板" })).toBeVisible();
+  expect(await screen.findByText("已重命名为“2025区域成交看板”")).toBeVisible();
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/dashboards/d1",
+    expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ name: "2025区域成交看板" })
+    })
+  );
+});
+
 test("persists a resized dashboard card", async () => {
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);

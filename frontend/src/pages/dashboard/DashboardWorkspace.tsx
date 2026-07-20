@@ -25,7 +25,9 @@ export function DashboardWorkspace() {
   const [blankDropTarget, setBlankDropTarget] = useState<DashboardCard["layout"] | null>(null);
   const [filters, setFilters] = useState({ year: "", district: "", metric: "" });
   const [isCreatingDashboard, setIsCreatingDashboard] = useState(false);
+  const [isRenamingDashboard, setIsRenamingDashboard] = useState(false);
   const [newDashboardName, setNewDashboardName] = useState("房价分析看板");
+  const [renameDashboardName, setRenameDashboardName] = useState("");
   const dragSession = useRef<string | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const filterOptions = useMemo(
@@ -72,6 +74,7 @@ export function DashboardWorkspace() {
     const nextIndex = dashboards.length + 1;
     setNewDashboardName(nextIndex > 1 ? `房价分析看板 ${nextIndex}` : "房价分析看板");
     setIsCreatingDashboard(true);
+    setIsRenamingDashboard(false);
   }
 
   async function create(event?: FormEvent) {
@@ -83,6 +86,26 @@ export function DashboardWorkspace() {
     setIsCreatingDashboard(false);
     setNewDashboardName("");
     setNotice(`已创建“${next.name}”`);
+  }
+
+  function startRename() {
+    if (!dashboard) return;
+    setRenameDashboardName(dashboard.name);
+    setIsRenamingDashboard(true);
+    setIsCreatingDashboard(false);
+  }
+
+  async function rename(event?: FormEvent) {
+    event?.preventDefault();
+    if (!dashboard) return;
+    const name = renameDashboardName.trim();
+    if (!name) return;
+    const next = await api.patch<Dashboard>(`/api/dashboards/${dashboard.id}`, { name });
+    setDashboard(next);
+    setDashboards((items) => items.map((item) => item.id === next.id ? next : item));
+    setIsRenamingDashboard(false);
+    setRenameDashboardName("");
+    setNotice(`已重命名为“${next.name}”`);
   }
 
   async function resize(card: DashboardCard) {
@@ -216,12 +239,18 @@ export function DashboardWorkspace() {
         dashboards={dashboards}
         dashboard={dashboard}
         isCreatingDashboard={isCreatingDashboard}
+        isRenamingDashboard={isRenamingDashboard}
         newDashboardName={newDashboardName}
+        renameDashboardName={renameDashboardName}
         onSelectDashboard={setDashboard}
         onStartCreate={startCreate}
         onCreate={create}
         onCancelCreate={() => setIsCreatingDashboard(false)}
         onNewDashboardNameChange={setNewDashboardName}
+        onStartRename={startRename}
+        onRename={rename}
+        onCancelRename={() => setIsRenamingDashboard(false)}
+        onRenameDashboardNameChange={setRenameDashboardName}
       />
       {notice && <div className="inline-alert">{notice}</div>}
       {!dashboard ? (

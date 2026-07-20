@@ -134,6 +134,33 @@ export function QueryWorkspace() {
     setNotice("已新建会话");
   }
 
+  async function deleteConversation(id: string) {
+    await api.delete(`/api/conversations/${id}`);
+    setConversations((items) => items.filter((item) => item.id !== id));
+    if (id === conversationId) {
+      const next = await api.post<{ id: string }>("/api/conversations");
+      setConversationId(next.id);
+      setHistory([]);
+      setChartTypes({});
+      setExpanded(false);
+      setThinkingCollapsed(false);
+    }
+    setNotice("已删除历史会话");
+    await loadConversations();
+  }
+
+  async function clearConversationHistory() {
+    await api.delete("/api/conversations");
+    const next = await api.post<{ id: string }>("/api/conversations");
+    setConversationId(next.id);
+    setHistory([]);
+    setChartTypes({});
+    setExpanded(false);
+    setThinkingCollapsed(false);
+    setConversations([]);
+    setNotice("已清空历史会话");
+  }
+
   async function restoreConversation(id: string) {
     setLoadingConversationId(id);
     try {
@@ -221,6 +248,8 @@ export function QueryWorkspace() {
         loadingConversationId={loadingConversationId}
         error={conversationHistoryError}
         onRestore={restoreConversation}
+        onDelete={deleteConversation}
+        onClear={clearConversationHistory}
         onRefresh={loadConversations}
       />
       <div className="query-layout">

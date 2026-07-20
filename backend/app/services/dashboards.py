@@ -89,6 +89,18 @@ def create_dashboard(session: Session, name: str) -> dict[str, Any]:
     return get_dashboard(session, dashboard_id)
 
 
+def rename_dashboard(session: Session, dashboard_id: str, name: str) -> dict[str, Any] | None:
+    if get_dashboard(session, dashboard_id) is None:
+        return None
+    timestamp = _now()
+    session.execute(
+        text("UPDATE dashboards SET name = :name, updated_at = :updated_at WHERE id = :id"),
+        {"name": name, "updated_at": timestamp, "id": dashboard_id},
+    )
+    session.commit()
+    return get_dashboard(session, dashboard_id)
+
+
 def add_card(
     session: Session,
     dashboard_id: str,

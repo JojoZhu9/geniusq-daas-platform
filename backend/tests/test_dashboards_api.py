@@ -42,6 +42,20 @@ def test_dashboard_share_view_and_card_removal(client):
     assert client.get(f"/api/dashboards/{dashboard['id']}").json()["cards"] == []
 
 
+def test_dashboard_can_be_renamed(client):
+    dashboard = client.post("/api/dashboards", json={"name": "旧名称"}).json()
+
+    response = client.patch(
+        f"/api/dashboards/{dashboard['id']}",
+        json={"name": "2025区域成交看板"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "2025区域成交看板"
+    assert client.get(f"/api/dashboards/{dashboard['id']}").json()["name"] == "2025区域成交看板"
+    assert client.get(f"/api/dashboards/share/{dashboard['share_id']}").json()["name"] == "2025区域成交看板"
+
+
 def test_dashboard_and_share_reuse_the_saved_analysis_datasets(client):
     conversation = client.post("/api/conversations").json()
     analysis = client.post(

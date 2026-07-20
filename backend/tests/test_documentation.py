@@ -41,10 +41,11 @@ def test_readme_documents_offline_start_and_optional_llm():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "start-demo.ps1" in readme
     assert "LLM_MODE=offline" in readme
-    assert "LLM_MODE=openai-compatible" in readme
+    assert "LLM_MODE=deepseek" in readme
+    assert "DEEPSEEK_API_KEY" in readme
     assert "127.0.0.1:5173" in readme
     assert "pytest" in readme
-    assert "npm.cmd run test:run" in readme
+    assert "npm --prefix frontend run test:run" in readme
 
 
 def test_environment_example_keeps_offline_as_the_default():

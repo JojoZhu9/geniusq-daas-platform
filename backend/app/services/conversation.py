@@ -19,7 +19,9 @@ from app.services.conversation_context import (
     prepare_query_for_context as _prepare_query_for_context,
 )
 from app.services.conversation_history import (
+    clear_conversations,
     create_conversation,
+    delete_conversation,
     get_analysis,
     get_conversation_history,
     list_conversations,

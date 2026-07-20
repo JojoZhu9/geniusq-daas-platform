@@ -167,6 +167,44 @@ def test_conversation_history_can_be_listed_and_restored(client):
     assert detail["exchanges"][1]["response"] == second
 
 
+def test_conversation_history_can_be_deleted(client):
+    conversation_id = client.post("/api/conversations").json()["id"]
+    analysis = client.post(
+        "/api/chat",
+        json={
+            "conversation_id": conversation_id,
+            "question": "分析2025年各区平均房价",
+        },
+    ).json()
+
+    response = client.delete(f"/api/conversations/{conversation_id}")
+
+    assert response.status_code == 204
+    assert client.get(f"/api/conversations/{conversation_id}").status_code == 404
+    assert client.get(f"/api/analysis/{analysis['analysis_id']}").status_code == 404
+    assert all(item["id"] != conversation_id for item in client.get("/api/conversations").json())
+
+
+def test_conversation_history_can_be_cleared(client):
+    first = client.post("/api/conversations").json()["id"]
+    second = client.post("/api/conversations").json()["id"]
+    for conversation_id in [first, second]:
+        client.post(
+            "/api/chat",
+            json={
+                "conversation_id": conversation_id,
+                "question": "分析2025年各区平均房价",
+            },
+        )
+
+    response = client.delete("/api/conversations")
+
+    assert response.status_code == 204
+    assert client.get("/api/conversations").json() == []
+    assert client.get(f"/api/conversations/{first}").status_code == 404
+    assert client.get(f"/api/conversations/{second}").status_code == 404
+
+
 def test_unknown_conversation_uses_public_error_shape(client):
     response = client.post(
         "/api/chat",

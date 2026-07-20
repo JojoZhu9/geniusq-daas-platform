@@ -141,3 +141,32 @@ def get_conversation_history(session: Session, conversation_id: str) -> dict[str
         "exchanges": exchanges,
     }
 
+
+def delete_conversation(session: Session, conversation_id: str) -> bool:
+    conversation = session.execute(
+        text("SELECT id FROM conversations WHERE id = :id"),
+        {"id": conversation_id},
+    ).mappings().first()
+    if conversation is None:
+        return False
+    session.execute(
+        text("DELETE FROM analysis_runs WHERE conversation_id = :conversation_id"),
+        {"conversation_id": conversation_id},
+    )
+    session.execute(
+        text("DELETE FROM messages WHERE conversation_id = :conversation_id"),
+        {"conversation_id": conversation_id},
+    )
+    session.execute(
+        text("DELETE FROM conversations WHERE id = :id"),
+        {"id": conversation_id},
+    )
+    session.commit()
+    return True
+
+
+def clear_conversations(session: Session) -> None:
+    session.execute(text("DELETE FROM analysis_runs"))
+    session.execute(text("DELETE FROM messages"))
+    session.execute(text("DELETE FROM conversations"))
+    session.commit()
