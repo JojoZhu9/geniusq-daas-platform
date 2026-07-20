@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import text
@@ -25,6 +24,7 @@ from app.services.conversation_history import (
     get_conversation_history,
     list_conversations,
     load_context as _load_context,
+    utc_now,
 )
 from app.services.conversation_insights import (
     dedupe_recommendations as _dedupe_recommendations,
@@ -49,10 +49,6 @@ from app.services.sql_guard import (
 
 DOMAIN_CONFIG = get_default_domain_config()
 ALLOWED_TABLES = DOMAIN_CONFIG.allowed_tables
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _dataset(source: str, sql: str, rows: list[dict[str, object]]) -> dict[str, Any]:
