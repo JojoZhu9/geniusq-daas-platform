@@ -19,11 +19,19 @@ from app.services.conversation_context import (
     merge_context,
     prepare_query_for_context as _prepare_query_for_context,
 )
+from app.services.conversation_history import (
+    create_conversation,
+    get_analysis,
+    get_conversation_history,
+    list_conversations,
+    load_context as _load_context,
+)
 from app.services.conversation_insights import (
     dedupe_recommendations as _dedupe_recommendations,
     result_insights as _result_insights,
     used_questions_and_recommendations as _used_questions_and_recommendations,
 )
+from app.services.conversation_sql_repair import apply_sql_repair as _apply_sql_repair
 from app.services.sql_guard import (
     TABLE_REF,
     SqlSafetyError,
@@ -41,37 +49,6 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def create_conversation(session: Session) -> dict[str, Any]:
-    conversation_id = str(uuid.uuid4())
-    timestamp = utc_now()
-    context = QueryContext()
-    session.execute(
-        text(
-            "INSERT INTO conversations "
-            "(id, context_json, created_at, updated_at) "
-            "VALUES (:id, :context, :created_at, :updated_at)"
-        ),
-        {
-            "id": conversation_id,
-            "context": context.model_dump_json(),
-            "created_at": timestamp,
-            "updated_at": timestamp,
-        },
-    )
-    session.commit()
-    return {"id": conversation_id, "context": context.model_dump(), "created_at": timestamp}
-
-
-def _load_context(session: Session, conversation_id: str) -> QueryContext | None:
-    row = session.execute(
-        text("SELECT context_json FROM conversations WHERE id = :id"),
-        {"id": conversation_id},
-    ).mappings().first()
-    if row is None:
-        return None
-    return QueryContext(**json.loads(row["context_json"]))
-
-
 def _dataset(source: str, sql: str, rows: list[dict[str, object]]) -> dict[str, Any]:
     tables = sorted(set(TABLE_REF.findall(sql)))
     fields = list(rows[0].keys()) if rows else []
@@ -84,52 +61,6 @@ def _dataset(source: str, sql: str, rows: list[dict[str, object]]) -> dict[str, 
         "fields": fields,
         "rows": rows,
     }
-
-
-def _apply_sql_repair(
-    engine: object,
-    plan: AnalysisPlan,
-    query: Any,
-    question: str,
-    context: QueryContext,
-    error_message: str,
-    reason: str,
-) -> bool:
-    repair = getattr(engine, "repair_sql", None)
-    if repair is None:
-        return False
-    original_sql = query.sql
-    try:
-        result = repair(question, context, original_sql, error_message, reason)
-    except Exception as exc:  # model repair is best-effort; never turn it into a 500
-        plan.metadata["sql_repair_status"] = "failed"
-        plan.metadata["sql_repair_error"] = str(exc)
-        plan.metadata.setdefault("sql_repair_attempts", []).append(
-            {
-                "reason": reason,
-                "from_sql": original_sql,
-                "message": error_message[:240],
-                "error": str(exc)[:240],
-            }
-        )
-        return False
-    repaired_sql = result.sql.strip()
-    if not repaired_sql or repaired_sql == original_sql.strip():
-        return False
-    query.sql = repaired_sql
-    if result.chart:
-        plan.chart = result.chart
-    if result.reasoning:
-        plan.metadata["sql_repair_reasoning"] = result.reasoning
-    plan.metadata.setdefault("sql_repair_attempts", []).append(
-        {
-            "reason": reason,
-            "from_sql": original_sql,
-            "to_sql": repaired_sql,
-            "message": error_message[:240],
-        }
-    )
-    return True
 
 
 def select_analysis_engine(session: Session):
@@ -521,98 +452,3 @@ def run_chat(
     session.commit()
     return response
 
-
-def get_analysis(session: Session, analysis_id: str) -> dict[str, Any] | None:
-    row = session.execute(
-        text("SELECT response_json FROM analysis_runs WHERE id = :id"),
-        {"id": analysis_id},
-    ).mappings().first()
-    return json.loads(row["response_json"]) if row else None
-
-
-def list_conversations(session: Session) -> list[dict[str, Any]]:
-    rows = session.execute(
-        text(
-            """
-            SELECT
-                conversations.id,
-                conversations.created_at,
-                conversations.updated_at,
-                first_run.question AS title,
-                latest_run.question AS latest_question,
-                latest_run.status AS latest_status,
-                COALESCE(run_counts.analysis_count, 0) AS analysis_count
-            FROM conversations
-            LEFT JOIN analysis_runs AS first_run
-                ON first_run.id = (
-                    SELECT id FROM analysis_runs
-                    WHERE conversation_id = conversations.id
-                    ORDER BY created_at ASC
-                    LIMIT 1
-                )
-            LEFT JOIN analysis_runs AS latest_run
-                ON latest_run.id = (
-                    SELECT id FROM analysis_runs
-                    WHERE conversation_id = conversations.id
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                )
-            LEFT JOIN (
-                SELECT conversation_id, COUNT(*) AS analysis_count
-                FROM analysis_runs
-                GROUP BY conversation_id
-            ) AS run_counts
-                ON run_counts.conversation_id = conversations.id
-            ORDER BY conversations.updated_at DESC
-            """
-        )
-    ).mappings().all()
-    return [
-        {
-            "id": row["id"],
-            "title": row["title"] or "新建会话",
-            "latest_question": row["latest_question"],
-            "latest_status": row["latest_status"],
-            "analysis_count": row["analysis_count"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-        }
-        for row in rows
-    ]
-
-
-def get_conversation_history(session: Session, conversation_id: str) -> dict[str, Any] | None:
-    conversation = session.execute(
-        text(
-            "SELECT id, context_json, created_at, updated_at "
-            "FROM conversations WHERE id = :id"
-        ),
-        {"id": conversation_id},
-    ).mappings().first()
-    if conversation is None:
-        return None
-    rows = session.execute(
-        text(
-            "SELECT question, response_json, created_at "
-            "FROM analysis_runs "
-            "WHERE conversation_id = :conversation_id "
-            "ORDER BY created_at ASC"
-        ),
-        {"conversation_id": conversation_id},
-    ).mappings().all()
-    exchanges = [
-        {
-            "question": row["question"],
-            "response": json.loads(row["response_json"]),
-            "created_at": row["created_at"],
-        }
-        for row in rows
-    ]
-    return {
-        "id": conversation["id"],
-        "context": json.loads(conversation["context_json"]),
-        "created_at": conversation["created_at"],
-        "updated_at": conversation["updated_at"],
-        "title": exchanges[0]["question"] if exchanges else "新建会话",
-        "exchanges": exchanges,
-    }
