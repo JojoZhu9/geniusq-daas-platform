@@ -17,6 +17,20 @@ def test_default_domain_config_exposes_real_estate_tables():
     assert config.tool_labels["knowledge_retriever"] == "知识库检索工具"
 
 
+def test_conversation_package_keeps_public_imports():
+    from app.services.conversation import (
+        get_analysis,
+        get_conversation_history,
+        list_conversations,
+        run_chat,
+    )
+
+    assert callable(run_chat)
+    assert callable(get_analysis)
+    assert callable(list_conversations)
+    assert callable(get_conversation_history)
+
+
 def test_incomplete_question_returns_recommendations_without_querying(client):
     conversation = client.post("/api/conversations").json()
 

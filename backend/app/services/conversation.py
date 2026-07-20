@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -15,6 +14,16 @@ from app.domain import get_default_domain_config
 from app.errors import ApiError
 from app.schemas import AnalysisPlan, ChartSpec, QueryContext
 from app.services.analysis import DeepSeekAnalysisEngine, OfflineAnalysisEngine
+from app.services.conversation_charting import repair_chart as _repair_chart
+from app.services.conversation_context import (
+    merge_context,
+    prepare_query_for_context as _prepare_query_for_context,
+)
+from app.services.conversation_insights import (
+    dedupe_recommendations as _dedupe_recommendations,
+    result_insights as _result_insights,
+    used_questions_and_recommendations as _used_questions_and_recommendations,
+)
 from app.services.sql_guard import (
     TABLE_REF,
     SqlSafetyError,
@@ -25,106 +34,11 @@ from app.services.sql_guard import (
 
 DOMAIN_CONFIG = get_default_domain_config()
 ALLOWED_TABLES = DOMAIN_CONFIG.allowed_tables
-DISTRICTS = DOMAIN_CONFIG.districts
-RELATIVE_YEAR_OFFSETS = DOMAIN_CONFIG.relative_year_offsets
-CHART_FIELD_PRIORITY = DOMAIN_CONFIG.chart_field_priority
 TOOL_LABELS = DOMAIN_CONFIG.tool_labels
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def merge_context(previous: QueryContext, question: str) -> QueryContext:
-    values = previous.model_dump()
-    years = [int(value) for value in re.findall(r"20\d{2}", question)]
-    if years:
-        values["year_from"] = min(years)
-        values["year_to"] = max(years)
-    else:
-        base_year = previous.year_to or previous.year_from
-        if base_year:
-            for keywords, offset in RELATIVE_YEAR_OFFSETS:
-                if any(keyword in question for keyword in keywords):
-                    values["year_from"] = base_year + offset
-                    values["year_to"] = base_year + offset
-                    break
-    for district in DISTRICTS:
-        district_alias = district.removesuffix("区")
-        if district in question or district_alias in question:
-            values["district"] = district
-            break
-    if "各区" in question or "全市" in question:
-        values["district"] = None
-    if "租金" in question:
-        values["metric"] = "租金"
-    elif "成交" in question or "交易" in question:
-        values["metric"] = "成交量"
-    elif "人口" in question:
-        values["metric"] = "人口"
-    elif "通勤" in question:
-        values["metric"] = "通勤"
-    elif "房价" in question or "均价" in question:
-        values["metric"] = "平均房价"
-    return QueryContext(**values)
-
-
-def _normalize_known_district_literals(query: Any) -> bool:
-    normalized_sql = query.sql
-    for district in DISTRICTS:
-        district_alias = district.removesuffix("区")
-        if not district_alias:
-            continue
-        for quote in ("'", '"'):
-            normalized_sql = normalized_sql.replace(
-                f"{quote}{district_alias}{quote}", f"{quote}{district}{quote}"
-            )
-    if normalized_sql == query.sql:
-        return False
-    query.sql = normalized_sql
-    return True
-
-
-def _selected_fields_sql(sql: str) -> str:
-    match = re.search(r"\bselect\b(.*?)\bfrom\b", sql, flags=re.IGNORECASE | re.DOTALL)
-    return match.group(1) if match else ""
-
-
-def _scope_sql_to_single_year_context(query: Any, context: QueryContext) -> bool:
-    if not context.year_from or context.year_from != context.year_to:
-        return False
-    sql = query.sql.strip().rstrip(";")
-    sql_years = set(re.findall(r"20\d{2}", sql))
-    context_year = str(context.year_from)
-    if context_year in sql_years:
-        return False
-    if sql_years:
-        query.sql = re.sub(r"20\d{2}", context_year, sql)
-        return True
-    selected_fields = _selected_fields_sql(sql)
-    year = context.year_from
-    if re.search(r"\bmonth\b", selected_fields, flags=re.IGNORECASE):
-        query.sql = (
-            f"SELECT * FROM ({sql}) AS scoped_query "
-            f"WHERE month LIKE '{year}-%'"
-        )
-        return True
-    if re.search(r"\byear\b", selected_fields, flags=re.IGNORECASE):
-        query.sql = (
-            f"SELECT * FROM ({sql}) AS scoped_query "
-            f"WHERE year = {year}"
-        )
-        return True
-    return False
-
-
-def _prepare_query_for_context(plan: AnalysisPlan, query: Any, context: QueryContext) -> None:
-    if _normalize_known_district_literals(query):
-        plan.metadata["sql_district_normalized"] = True
-    if _scope_sql_to_single_year_context(query, context):
-        plan.metadata["sql_context_scoped"] = True
-        if re.search(r"20\d{2}", query.sql):
-            plan.metadata["sql_context_year_corrected"] = True
 
 
 def create_conversation(session: Session) -> dict[str, Any]:
@@ -172,138 +86,6 @@ def _dataset(source: str, sql: str, rows: list[dict[str, object]]) -> dict[str, 
     }
 
 
-def _is_number(value: object) -> bool:
-    if value is None or isinstance(value, bool):
-        return False
-    try:
-        float(value)
-    except (TypeError, ValueError):
-        return False
-    return True
-
-
-def _chart_title(question: str, x_field: str, y_fields: list[str]) -> str:
-    metric_label = "、".join(y_fields) if y_fields else "查询结果"
-    if "租金" in question:
-        metric_label = "租金"
-    elif "挂牌" in question:
-        metric_label = "挂牌量"
-    elif "空置" in question:
-        metric_label = "空置率"
-    elif "成交" in question:
-        metric_label = "成交量"
-    elif "地铁" in question:
-        metric_label = "地铁覆盖率"
-    elif "就业" in question:
-        metric_label = "就业密度"
-    elif "人口" in question:
-        metric_label = "人口"
-    elif "通勤" in question:
-        metric_label = "通勤指标"
-    elif "房价" in question or "均价" in question:
-        metric_label = "房价"
-    return f"{metric_label}按{x_field}分析"
-
-
-def _pick_y_fields(question: str, fields: list[str], numeric_fields: list[str]) -> list[str]:
-    lowered_question = question.lower()
-    for keywords, candidates in CHART_FIELD_PRIORITY:
-        if any(keyword.lower() in lowered_question for keyword in keywords):
-            matched = [field for field in candidates if field in numeric_fields]
-            if matched:
-                return matched[:2]
-    preferred = [
-        field
-        for field in (
-            "avg_price",
-            "rent_price",
-            "transaction_count",
-            "resident_population",
-            "avg_commute_minutes",
-            "median_income",
-        )
-        if field in numeric_fields
-    ]
-    return (preferred or numeric_fields)[:2]
-
-
-def _repair_chart(
-    chart: ChartSpec | None,
-    datasets: list[dict[str, Any]],
-    question: str,
-    metadata: dict[str, Any],
-) -> ChartSpec | None:
-    rows = [row for dataset in datasets for row in dataset["rows"]]
-    fields = list(dict.fromkeys(field for dataset in datasets for field in dataset["fields"]))
-    if not rows or not fields:
-        return None
-
-    numeric_fields = [
-        field for field in fields if any(_is_number(row.get(field)) for row in rows)
-    ]
-    if not numeric_fields:
-        metadata["chart_validation_status"] = "table_only_no_numeric_field"
-        return ChartSpec(type="table", x_field=fields[0], y_fields=[], title="查询结果明细")
-
-    valid_chart = (
-        chart is not None
-        and chart.x_field in fields
-        and bool(chart.y_fields)
-        and all(field in fields for field in chart.y_fields)
-        and any(field in numeric_fields for field in chart.y_fields)
-    )
-    if valid_chart:
-        metadata["chart_validation_status"] = "passed"
-        return _enrich_chart_spec(chart, fields)
-
-    x_field = "month" if "month" in fields else "district" if "district" in fields else fields[0]
-    y_fields = _pick_y_fields(question, fields, numeric_fields)
-    chart_type = "line" if x_field == "month" else "bar"
-    metadata["chart_validation_status"] = "repaired"
-    metadata["chart_repair_reason"] = (
-        "模型未返回图表建议或图表字段不在 SQL 查询结果中，已按实际结果字段重建图表。"
-    )
-    return _enrich_chart_spec(ChartSpec(
-        type=chart_type,
-        x_field=x_field,
-        y_fields=y_fields,
-        title=_chart_title(question, x_field, y_fields),
-    ), fields)
-
-
-def _field_unit(field: str) -> str | None:
-    return DOMAIN_CONFIG.field_units.get(field)
-
-
-def _recommend_reason(chart_type: str, x_field: str) -> str:
-    if chart_type == "line" and x_field == "month":
-        return "按月份展示趋势，推荐使用折线图。"
-    if chart_type == "bar":
-        return "按区域或类别对比数值，推荐使用柱状图。"
-    if chart_type == "pie":
-        return "展示构成占比，推荐使用饼图。"
-    if chart_type == "scatter":
-        return "展示两个数值指标之间的关系，推荐使用散点图。"
-    if chart_type == "stacked_bar":
-        return "展示多个指标在同一类别下的构成，推荐使用堆叠柱状图。"
-    return "展示查询明细，推荐使用表格。"
-
-
-def _enrich_chart_spec(chart: ChartSpec, fields: list[str]) -> ChartSpec:
-    y_field = chart.y_fields[0] if chart.y_fields else ""
-    return ChartSpec(
-        type=chart.type,
-        x_field=chart.x_field,
-        y_fields=chart.y_fields,
-        title=chart.title,
-        x_axis_name=chart.x_axis_name or chart.x_field,
-        y_axis_name=chart.y_axis_name or y_field or None,
-        unit=chart.unit or _field_unit(y_field),
-        series_mode=chart.series_mode or ("stacked" if chart.type == "stacked_bar" else None),
-        recommended_reason=chart.recommended_reason or _recommend_reason(chart.type, chart.x_field),
-    )
-
-
 def _apply_sql_repair(
     engine: object,
     plan: AnalysisPlan,
@@ -348,108 +130,6 @@ def _apply_sql_repair(
         }
     )
     return True
-
-
-def _result_insights(plan: AnalysisPlan, datasets: list[dict[str, Any]]) -> list[str]:
-    insights = list(plan.insights)
-    price_rows = [
-        row
-        for dataset in datasets
-        for row in dataset["rows"]
-        if row.get("avg_price") is not None
-    ]
-    if price_rows:
-        maximum = max(price_rows, key=lambda row: float(row["avg_price"]))
-        insights.insert(
-            0,
-            f"最大值：{maximum.get('district', '当前范围')}平均房价为"
-            f" {float(maximum['avg_price']):,.0f} 元/平方米。",
-        )
-    yoy_rows = [row for row in price_rows if row.get("yoy_change") is not None]
-    if yoy_rows:
-        anomaly = max(yoy_rows, key=lambda row: abs(float(row["yoy_change"])))
-        insights.insert(
-            1,
-            f"异常点：{anomaly.get('district', '当前范围')}"
-            f" {anomaly.get('month', '')} 同比变化 {float(anomaly['yoy_change']):.2f}%。",
-        )
-    if not any(dataset["rows"] for dataset in datasets):
-        insights.insert(0, "当前筛选条件下没有匹配数据，可放宽时间或区域范围。")
-    return insights
-
-
-def _used_questions_and_recommendations(session: Session, conversation_id: str) -> set[str]:
-    used = {
-        row["content"].strip()
-        for row in session.execute(
-            text(
-                "SELECT content FROM messages "
-                "WHERE conversation_id = :conversation_id AND role = 'user'"
-            ),
-            {"conversation_id": conversation_id},
-        ).mappings()
-        if row["content"].strip()
-    }
-    rows = session.execute(
-        text(
-            "SELECT response_json FROM analysis_runs "
-            "WHERE conversation_id = :conversation_id"
-        ),
-        {"conversation_id": conversation_id},
-    ).mappings()
-    for row in rows:
-        try:
-            response = json.loads(row["response_json"])
-        except json.JSONDecodeError:
-            continue
-        used.update(item.strip() for item in response.get("suggestions", []) if item.strip())
-        used.update(item.strip() for item in response.get("follow_ups", []) if item.strip())
-    return used
-
-
-def _recommendation_pool(context: QueryContext) -> list[str]:
-    year = context.year_from or context.year_to or 2025
-    district = context.district
-    if district:
-        return [
-            f"对比{district}和全市其他区的{year}年房价趋势",
-            f"继续分析{district}{year}年房价与成交量的关系",
-            f"查看{district}{year}年同比涨幅最高的月份",
-            f"分析{district}{year}年成交套数变化",
-            f"对比{district}{year}年房价环比和同比变化",
-            f"把{district}{year}年房价趋势保存到仪表盘",
-        ]
-    return [
-        f"分析{year}年各区房价趋势",
-        f"对比{year - 1}年和{year}年各区房价涨幅",
-        f"分析{year}年房价与成交量的关系",
-        f"只看海淀区和朝阳区的{year}年房价趋势",
-        f"查看{year}年同比涨幅最高的区域",
-        f"分析{year}年房价与人口增长的关系",
-        f"分析{year}年房价与通勤时间的关系",
-        f"把{year}年各区房价趋势保存到仪表盘",
-    ]
-
-
-def _dedupe_recommendations(
-    primary: list[str],
-    used: set[str],
-    context: QueryContext,
-    current_question: str,
-) -> list[str]:
-    blocked = {current_question.strip(), *used}
-    result: list[str] = []
-    for item in [*primary, *_recommendation_pool(context)]:
-        if item and item not in blocked and item not in result:
-            result.append(item)
-        if len(result) == 3:
-            return result
-    year = context.year_from or context.year_to or 2025
-    while len(result) < 3:
-        fallback = f"继续探索{year}年房价分析方向 {len(result) + 1}"
-        if fallback not in blocked:
-            result.append(fallback)
-    return result
 
 
 def select_analysis_engine(session: Session):
