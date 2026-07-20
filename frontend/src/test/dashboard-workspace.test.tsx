@@ -50,6 +50,124 @@ const twoColumnDashboard = {
 
 beforeEach(() => vi.restoreAllMocks());
 
+test("dashboard workspace can be imported from the split page module", async () => {
+  const module = await import("../pages/dashboard/DashboardWorkspace");
+
+  expect(module.DashboardWorkspace).toBe(DashboardWorkspace);
+});
+
+test("creates a dashboard with a custom name", async () => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([]);
+    if (path === "/api/dashboards" && init?.method === "POST") {
+      return json({
+        id: "custom-dashboard",
+        name: "2025区域成交看板",
+        share_id: "share-custom",
+        share_url: "/share/share-custom",
+        requirement_ids: ["2.6"],
+        cards: []
+      }, 201);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace(<DashboardWorkspace />);
+  await userEvent.click(await screen.findByRole("button", { name: "新建仪表盘" }));
+  await userEvent.clear(screen.getByLabelText("仪表盘名称"));
+  await userEvent.type(screen.getByLabelText("仪表盘名称"), "2025区域成交看板");
+  await userEvent.click(screen.getByRole("button", { name: "创建" }));
+
+  await screen.findByRole("heading", { name: "2025区域成交看板" });
+  const request = fetchMock.mock.calls.find(([input, init]) => (
+    String(input) === "/api/dashboards" && init?.method === "POST"
+  ));
+  expect(JSON.parse(String(request?.[1]?.body))).toEqual({ name: "2025区域成交看板" });
+});
+
+test("renames the selected dashboard", async () => {
+  let current = dashboard;
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([current]);
+    if (path === "/api/dashboards/d1" && init?.method === "PATCH") {
+      current = { ...current, name: JSON.parse(String(init.body)).name };
+      return json(current);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace(<DashboardWorkspace />);
+  await screen.findByRole("heading", { name: "房价分析看板" });
+  await userEvent.click(screen.getByRole("button", { name: "重命名仪表盘" }));
+  await userEvent.clear(screen.getByLabelText("新仪表盘名称"));
+  await userEvent.type(screen.getByLabelText("新仪表盘名称"), "2025区域成交看板");
+  await userEvent.click(screen.getByRole("button", { name: "保存名称" }));
+
+  expect(await screen.findByRole("heading", { name: "2025区域成交看板" })).toBeVisible();
+  expect(await screen.findByText("已重命名为“2025区域成交看板”")).toBeVisible();
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/dashboards/d1",
+    expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ name: "2025区域成交看板" })
+    })
+  );
+});
+
+test("does not rename a dashboard with a blank name", async () => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([dashboard]);
+    if (path === "/api/dashboards/d1" && init?.method === "PATCH") {
+      return json({ code: "SHOULD_NOT_CALL" }, 500);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace(<DashboardWorkspace />);
+  await screen.findByRole("heading", { name: "房价分析看板" });
+  await userEvent.click(screen.getByRole("button", { name: "重命名仪表盘" }));
+  await userEvent.clear(screen.getByLabelText("新仪表盘名称"));
+  await userEvent.click(screen.getByRole("button", { name: "保存名称" }));
+
+  expect(await screen.findByText("仪表盘名称不能为空")).toBeVisible();
+  expect(fetchMock).not.toHaveBeenCalledWith(
+    "/api/dashboards/d1",
+    expect.objectContaining({ method: "PATCH" })
+  );
+});
+
+test("does not rename a dashboard to an existing dashboard name", async () => {
+  const otherDashboard = { ...dashboard, id: "d2", name: "成交看板", share_id: "share-2", share_url: "/share/share-2", cards: [] };
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([dashboard, otherDashboard]);
+    if (path === "/api/dashboards/d1" && init?.method === "PATCH") {
+      return json({ code: "SHOULD_NOT_CALL" }, 500);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace(<DashboardWorkspace />);
+  await screen.findByRole("heading", { name: "房价分析看板" });
+  await userEvent.click(screen.getByRole("button", { name: "重命名仪表盘" }));
+  await userEvent.clear(screen.getByLabelText("新仪表盘名称"));
+  await userEvent.type(screen.getByLabelText("新仪表盘名称"), "成交看板");
+  await userEvent.click(screen.getByRole("button", { name: "保存名称" }));
+
+  expect(await screen.findByText("仪表盘名称已存在，请换一个名称")).toBeVisible();
+  expect(fetchMock).not.toHaveBeenCalledWith(
+    "/api/dashboards/d1",
+    expect.objectContaining({ method: "PATCH" })
+  );
+});
+
 test("persists a resized dashboard card", async () => {
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);

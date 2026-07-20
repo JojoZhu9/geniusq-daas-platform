@@ -75,6 +75,14 @@ test("live thinking reveals only completed steps plus the active tool step", () 
   ]);
 });
 
+test("query workspace can be imported from the split page module", async () => {
+  const module = await import("../pages/query/QueryWorkspace");
+  const utils = await import("../pages/query/queryUtils");
+
+  expect(module.QueryWorkspace).toBe(QueryWorkspace);
+  expect(utils.liveThinkingSteps(0)[0].title).toBe("理解用户问题");
+});
+
 test("renders called tool without input and output summaries in the thinking timeline", () => {
   render(
     <ThinkingTimeline
@@ -160,8 +168,268 @@ test("submits an incomplete question and offers clickable suggestions", async ()
   await userEvent.click(screen.getByRole("button", { name: "发送" }));
 
   expect(await screen.findByRole("button", { name: "分析2025年各区平均房价" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "需求 2.2" })).toBeVisible();
+  expect(screen.queryByRole("link", { name: /需求/ })).not.toBeInTheDocument();
   expect(screen.queryByText("SQL 查询")).not.toBeInTheDocument();
+});
+
+test("shows the history panel even before any conversation has results", async () => {
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations" && init?.method === "POST") return json({ id: "c-empty" }, 201);
+    if (path === "/api/conversations" && (!init?.method || init.method === "GET")) return json([]);
+    if (path === "/api/model-settings") return json(defaultModelSettings);
+    throw new Error(`Unexpected request: ${path}`);
+  }));
+
+  renderWorkspace();
+
+  expect(await screen.findByLabelText("历史会话")).toBeVisible();
+  expect(screen.getByText("暂无历史会话", { exact: false })).toBeVisible();
+  expect(screen.getByRole("button", { name: "刷新历史" })).toBeVisible();
+});
+
+test("refreshes the history panel after saved conversations appear", async () => {
+  let historyRequests = 0;
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations" && init?.method === "POST") return json({ id: "c-new" }, 201);
+    if (path === "/api/conversations" && (!init?.method || init.method === "GET")) {
+      historyRequests += 1;
+      return json(historyRequests === 1 ? [] : [{
+        id: "c-saved",
+        title: "历史房价分析",
+        latest_question: "继续看朝阳区",
+        latest_status: "completed",
+        analysis_count: 3,
+        created_at: "2026-07-14T00:00:00+08:00",
+        updated_at: "2026-07-14T00:05:00+08:00"
+      }]);
+    }
+    if (path === "/api/model-settings") return json(defaultModelSettings);
+    throw new Error(`Unexpected request: ${path}`);
+  }));
+
+  renderWorkspace();
+  expect(await screen.findByText("暂无历史会话", { exact: false })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "刷新历史" }));
+
+  expect(await screen.findByRole("button", { name: "打开会话：历史房价分析" })).toBeVisible();
+  expect(screen.getByText("继续看朝阳区", { exact: false })).toBeVisible();
+});
+
+test("shows a clear history error when the backend needs restarting", async () => {
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations" && init?.method === "POST") return json({ id: "c-error" }, 201);
+    if (path === "/api/conversations" && (!init?.method || init.method === "GET")) {
+      return json({ code: "NOT_FOUND", message: "not found", action: "restart", request_id: "r1" }, 404);
+    }
+    if (path === "/api/model-settings") return json(defaultModelSettings);
+    throw new Error(`Unexpected request: ${path}`);
+  }));
+
+  renderWorkspace();
+
+  expect(await screen.findByText("历史接口暂不可用", { exact: false })).toBeVisible();
+  expect(screen.getByRole("button", { name: "刷新历史" })).toBeVisible();
+});
+
+test("restores a saved conversation from the history list", async () => {
+  const restoredAnalysis = {
+    ...completedAnalysis,
+    analysis_id: "a-restored",
+    conversation_id: "c-old"
+  };
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations" && init?.method === "POST") return json({ id: "c-new" }, 201);
+    if (path === "/api/conversations" && (!init?.method || init.method === "GET")) {
+      return json([{
+        id: "c-old",
+        title: "2025区域房价分析",
+        latest_question: "只看海淀区",
+        latest_status: "completed",
+        analysis_count: 2,
+        created_at: "2026-07-14T00:00:00+08:00",
+        updated_at: "2026-07-14T00:03:00+08:00"
+      }]);
+    }
+    if (path === "/api/conversations/c-old") {
+      return json({
+        id: "c-old",
+        title: "2025区域房价分析",
+        context: restoredAnalysis.context,
+        created_at: "2026-07-14T00:00:00+08:00",
+        updated_at: "2026-07-14T00:03:00+08:00",
+        exchanges: [{ question: "只看海淀区", response: restoredAnalysis, created_at: restoredAnalysis.created_at }]
+      });
+    }
+    if (path === "/api/model-settings") return json(defaultModelSettings);
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace();
+  await userEvent.click(await screen.findByRole("button", { name: "打开会话：2025区域房价分析" }));
+
+  expect((await screen.findAllByText("只看海淀区")).length).toBeGreaterThan(1);
+  expect(screen.getByText("a-restor", { exact: false })).toBeVisible();
+  expect(fetchMock).toHaveBeenCalledWith("/api/conversations/c-old", expect.anything());
+});
+
+test("deletes a saved conversation and starts a fresh conversation when it was active", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  let conversations = [{
+    id: "c-old",
+    title: "2025区域房价分析",
+    latest_question: "只看海淀区",
+    latest_status: "completed",
+    analysis_count: 2,
+    created_at: "2026-07-14T00:00:00+08:00",
+    updated_at: "2026-07-14T00:03:00+08:00"
+  }];
+  let postCount = 0;
+  const restoredAnalysis = {
+    ...completedAnalysis,
+    analysis_id: "a-restored",
+    conversation_id: "c-old"
+  };
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations" && init?.method === "POST") {
+      postCount += 1;
+      return json({ id: postCount === 1 ? "c-new" : "c-after-delete" }, 201);
+    }
+    if (path === "/api/conversations" && (!init?.method || init.method === "GET")) return json(conversations);
+    if (path === "/api/conversations/c-old" && (!init?.method || init.method === "GET")) {
+      return json({
+        id: "c-old",
+        title: "2025区域房价分析",
+        context: restoredAnalysis.context,
+        created_at: "2026-07-14T00:00:00+08:00",
+        updated_at: "2026-07-14T00:03:00+08:00",
+        exchanges: [{ question: "只看海淀区", response: restoredAnalysis, created_at: restoredAnalysis.created_at }]
+      });
+    }
+    if (path === "/api/conversations/c-old" && init?.method === "DELETE") {
+      conversations = [];
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    if (path === "/api/model-settings") return json(defaultModelSettings);
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace();
+  await userEvent.click(await screen.findByRole("button", { name: "打开会话：2025区域房价分析" }));
+  expect(await screen.findByText("a-restor", { exact: false })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "删除会话：2025区域房价分析" }));
+
+  expect(await screen.findByText("已删除历史会话")).toBeVisible();
+  expect(screen.getByText("暂无历史会话", { exact: false })).toBeVisible();
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/conversations/c-old",
+    expect.objectContaining({ method: "DELETE" })
+  );
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+    "/api/conversations",
+    expect.objectContaining({ method: "POST" })
+  ));
+});
+
+test("does not delete a saved conversation when the user cancels confirmation", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(false);
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations" && init?.method === "POST") return json({ id: "c-new" }, 201);
+    if (path === "/api/conversations" && (!init?.method || init.method === "GET")) return json([{
+      id: "c-old",
+      title: "2025区域房价分析",
+      latest_question: "只看海淀区",
+      latest_status: "completed",
+      analysis_count: 2,
+      created_at: "2026-07-14T00:00:00+08:00",
+      updated_at: "2026-07-14T00:03:00+08:00"
+    }]);
+    if (path === "/api/model-settings") return json(defaultModelSettings);
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace();
+  await userEvent.click(await screen.findByRole("button", { name: "删除会话：2025区域房价分析" }));
+
+  expect(fetchMock).not.toHaveBeenCalledWith(
+    "/api/conversations/c-old",
+    expect.objectContaining({ method: "DELETE" })
+  );
+  expect(screen.getByRole("button", { name: "打开会话：2025区域房价分析" })).toBeVisible();
+});
+
+test("clears all saved conversations from the history panel", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  let conversations = [{
+    id: "c-old",
+    title: "历史房价分析",
+    latest_question: "继续看朝阳区",
+    latest_status: "completed",
+    analysis_count: 3,
+    created_at: "2026-07-14T00:00:00+08:00",
+    updated_at: "2026-07-14T00:05:00+08:00"
+  }];
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations" && init?.method === "POST") return json({ id: "c-new" }, 201);
+    if (path === "/api/conversations" && init?.method === "DELETE") {
+      conversations = [];
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    if (path === "/api/conversations" && (!init?.method || init.method === "GET")) return json(conversations);
+    if (path === "/api/model-settings") return json(defaultModelSettings);
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace();
+  expect(await screen.findByRole("button", { name: "打开会话：历史房价分析" })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "清空历史" }));
+
+  expect(await screen.findByText("已清空历史会话")).toBeVisible();
+  expect(screen.getByText("暂无历史会话", { exact: false })).toBeVisible();
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/conversations",
+    expect.objectContaining({ method: "DELETE" })
+  );
+});
+
+test("does not clear saved conversations when the user cancels confirmation", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(false);
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations" && init?.method === "POST") return json({ id: "c-new" }, 201);
+    if (path === "/api/conversations" && (!init?.method || init.method === "GET")) return json([{
+      id: "c-old",
+      title: "历史房价分析",
+      latest_question: "继续看朝阳区",
+      latest_status: "completed",
+      analysis_count: 3,
+      created_at: "2026-07-14T00:00:00+08:00",
+      updated_at: "2026-07-14T00:05:00+08:00"
+    }]);
+    if (path === "/api/model-settings") return json(defaultModelSettings);
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace();
+  await screen.findByRole("button", { name: "打开会话：历史房价分析" });
+  await userEvent.click(screen.getByRole("button", { name: "清空历史" }));
+
+  expect(fetchMock).not.toHaveBeenCalledWith(
+    "/api/conversations",
+    expect.objectContaining({ method: "DELETE" })
+  );
+  expect(screen.getByRole("button", { name: "打开会话：历史房价分析" })).toBeVisible();
 });
 
 test("expands auditable steps and saves the chart to a dashboard", async () => {
