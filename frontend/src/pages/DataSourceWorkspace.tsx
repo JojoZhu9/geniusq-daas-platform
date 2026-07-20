@@ -125,11 +125,14 @@ export function DataSourceWorkspace() {
                   <tbody>
                     {detail.columns.map((column) => (
                       <tr key={column.name}>
-                        <td><code>{column.name}</code>{column.is_primary_key && <span className="pk-chip">PK</span>}</td>
+                        <td className="datasource-name-cell">
+                          <code>{column.name}</code>
+                          {column.is_primary_key && <span className="pk-chip">PK</span>}
+                        </td>
                         <td>{column.label}</td>
                         <td>{column.type}</td>
                         <td>{column.role}</td>
-                        <td>{formatValue(column.sample_value)}</td>
+                        <td className="datasource-value-cell">{formatValue(column.sample_value)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -145,7 +148,11 @@ export function DataSourceWorkspace() {
                   <tbody>
                     {detail.sample_rows.map((row, index) => (
                       <tr key={index}>
-                        {sampleColumns.map((column) => <td key={column.name}>{formatValue(row[column.name])}</td>)}
+                        {sampleColumns.map((column) => (
+                          <td className="datasource-value-cell" key={column.name}>
+                            {formatValue(row[column.name])}
+                          </td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>

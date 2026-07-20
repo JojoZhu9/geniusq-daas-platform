@@ -6,7 +6,7 @@ import { AnalysisChart } from "../components/AnalysisChart";
 import { DataSourcePanel } from "../components/DataSourcePanel";
 import { RequirementBadge } from "../components/RequirementBadge";
 import { ThinkingTimeline } from "../components/ThinkingTimeline";
-import type { AnalysisResponse, ChartSpec, Dashboard } from "../types";
+import type { AnalysisResponse, ChartSpec, ConversationDetail, ConversationSummary, Dashboard } from "../types";
 
 type Exchange = { question: string; response: AnalysisResponse };
 
@@ -80,13 +80,28 @@ export function QueryWorkspace() {
   const [notice, setNotice] = useState("");
   const [initError, setInitError] = useState("");
   const [chartTypes, setChartTypes] = useState<Record<string, ChartSpec["type"]>>({});
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [loadingConversationId, setLoadingConversationId] = useState("");
+  const [conversationHistoryError, setConversationHistoryError] = useState("");
   const latest = history.at(-1)?.response;
   const liveSteps = useMemo(() => liveThinkingSteps(liveStepIndex), [liveStepIndex]);
+
+  async function loadConversations() {
+    try {
+      const items = await api.get<ConversationSummary[]>("/api/conversations");
+      setConversations(Array.isArray(items) ? items.filter((item) => item.analysis_count > 0) : []);
+      setConversationHistoryError("");
+    } catch {
+      setConversations([]);
+      setConversationHistoryError("历史接口暂不可用，请重启后端服务后刷新");
+    }
+  }
 
   useEffect(() => {
     api.post<{ id: string }>("/api/conversations")
       .then((value) => setConversationId(value.id))
       .catch(() => setInitError("无法初始化本地会话，请确认后端服务已启动。"));
+    loadConversations();
     api.get<ModelSettings>("/api/model-settings")
       .then((settings) => {
         setModelSettings(settings);
@@ -113,6 +128,7 @@ export function QueryWorkspace() {
       setThinkingCollapsed(false);
       setPendingQuestion("");
       setNotice("");
+      loadConversations();
     }
   });
 
@@ -148,6 +164,24 @@ export function QueryWorkspace() {
     setHistory([]);
     setChartTypes({});
     setNotice("已新建会话");
+  }
+
+  async function restoreConversation(id: string) {
+    setLoadingConversationId(id);
+    try {
+      const detail = await api.get<ConversationDetail>(`/api/conversations/${id}`);
+      setConversationId(detail.id);
+      setHistory(detail.exchanges.map((exchange) => ({
+        question: exchange.question,
+        response: exchange.response
+      })));
+      setChartTypes({});
+      setExpanded(false);
+      setThinkingCollapsed(false);
+      setNotice(`已恢复“${detail.title}”`);
+    } finally {
+      setLoadingConversationId("");
+    }
   }
 
   async function saveToDashboard() {
@@ -243,6 +277,31 @@ export function QueryWorkspace() {
           </form>
         </div>
       )}
+      <div className="conversation-history panel" aria-label="历史会话">
+          <div>
+            <small>历史会话</small>
+            <strong>保存的问数记录</strong>
+          </div>
+          <div className="conversation-history-list">
+            {conversationHistoryError && <span className="conversation-history-empty">{conversationHistoryError}</span>}
+            {!conversationHistoryError && conversations.length === 0 && (
+              <span className="conversation-history-empty">暂无历史会话，完成一次问数后会自动保存到这里</span>
+            )}
+            {conversations.slice(0, 6).map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={item.id === conversationId ? "conversation-history-item active" : "conversation-history-item"}
+                onClick={() => restoreConversation(item.id)}
+                disabled={loadingConversationId === item.id}
+              >
+                <strong>{item.title}</strong>
+                <span>{item.latest_question ?? "暂无问题"} · {item.analysis_count} 轮</span>
+              </button>
+            ))}
+          </div>
+          <button className="text-button" type="button" onClick={loadConversations}>刷新历史</button>
+      </div>
       <div className="query-layout">
         <main className="query-main panel">
           <div className="query-welcome">

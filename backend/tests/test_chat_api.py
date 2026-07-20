@@ -104,6 +104,39 @@ def test_completed_analysis_can_be_reloaded(client):
     assert len(loaded.json()["datasets"]) == 2
 
 
+def test_conversation_history_can_be_listed_and_restored(client):
+    conversation_id = client.post("/api/conversations").json()["id"]
+    first = client.post(
+        "/api/chat",
+        json={
+            "conversation_id": conversation_id,
+            "question": "分析2025年各区平均房价",
+        },
+    ).json()
+    second = client.post(
+        "/api/chat",
+        json={"conversation_id": conversation_id, "question": "只看海淀区"},
+    ).json()
+
+    conversations = client.get("/api/conversations").json()
+    current = conversations[0]
+
+    assert current["id"] == conversation_id
+    assert current["title"] == "分析2025年各区平均房价"
+    assert current["latest_question"] == "只看海淀区"
+    assert current["analysis_count"] == 2
+
+    detail = client.get(f"/api/conversations/{conversation_id}").json()
+
+    assert detail["id"] == conversation_id
+    assert [item["question"] for item in detail["exchanges"]] == [
+        "分析2025年各区平均房价",
+        "只看海淀区",
+    ]
+    assert detail["exchanges"][0]["response"] == first
+    assert detail["exchanges"][1]["response"] == second
+
+
 def test_unknown_conversation_uses_public_error_shape(client):
     response = client.post(
         "/api/chat",

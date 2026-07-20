@@ -50,6 +50,37 @@ const twoColumnDashboard = {
 
 beforeEach(() => vi.restoreAllMocks());
 
+test("creates a dashboard with a custom name", async () => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([]);
+    if (path === "/api/dashboards" && init?.method === "POST") {
+      return json({
+        id: "custom-dashboard",
+        name: "2025区域成交看板",
+        share_id: "share-custom",
+        share_url: "/share/share-custom",
+        requirement_ids: ["2.6"],
+        cards: []
+      }, 201);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace(<DashboardWorkspace />);
+  await userEvent.click(await screen.findByRole("button", { name: "新建仪表盘" }));
+  await userEvent.clear(screen.getByLabelText("仪表盘名称"));
+  await userEvent.type(screen.getByLabelText("仪表盘名称"), "2025区域成交看板");
+  await userEvent.click(screen.getByRole("button", { name: "创建" }));
+
+  await screen.findByRole("heading", { name: "2025区域成交看板" });
+  const request = fetchMock.mock.calls.find(([input, init]) => (
+    String(input) === "/api/dashboards" && init?.method === "POST"
+  ));
+  expect(JSON.parse(String(request?.[1]?.body))).toEqual({ name: "2025区域成交看板" });
+});
+
 test("persists a resized dashboard card", async () => {
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);

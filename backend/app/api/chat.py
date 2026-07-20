@@ -4,7 +4,13 @@ from sqlalchemy.orm import Session
 from app.db import get_session
 from app.errors import ApiError
 from app.schemas import ChatRequest
-from app.services.conversation import create_conversation, get_analysis, run_chat
+from app.services.conversation import (
+    create_conversation,
+    get_analysis,
+    get_conversation_history,
+    list_conversations,
+    run_chat,
+)
 from app.services.feedback import save_analysis_feedback
 
 
@@ -18,6 +24,23 @@ def _not_found(code: str, message: str, action: str) -> ApiError:
 @router.post("/conversations", status_code=201)
 def new_conversation(session: Session = Depends(get_session)):
     return create_conversation(session)
+
+
+@router.get("/conversations")
+def conversations(session: Session = Depends(get_session)):
+    return list_conversations(session)
+
+
+@router.get("/conversations/{conversation_id}")
+def conversation_detail(conversation_id: str, session: Session = Depends(get_session)):
+    conversation = get_conversation_history(session, conversation_id)
+    if conversation is None:
+        raise _not_found(
+            "CONVERSATION_NOT_FOUND",
+            "会话不存在或已失效",
+            "请新建会话后重试",
+        )
+    return conversation
 
 
 @router.post("/chat")

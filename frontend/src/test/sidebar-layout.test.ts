@@ -22,3 +22,22 @@ test("offsets the main content for fixed chrome", () => {
   expect(css).toContain("grid-template-columns: 212px minmax(0, 1fr);");
   expect(css).toContain(".page-canvas { grid-column: 2;");
 });
+
+test("prevents centered pages from shifting when content height changes", () => {
+  expect(css).toContain("html { scrollbar-gutter: stable;");
+  expect(css).toContain("overflow-y: scroll;");
+});
+
+test("keeps datasource tables stable when cells contain long text", () => {
+  expect(css).toContain(".datasource-column-table table,");
+  expect(css).toContain("table-layout: fixed;");
+  expect(css).toContain("overflow-wrap: anywhere;");
+  expect(css).toContain(".datasource-value-cell");
+});
+
+test("keeps datasource list and detail boundaries aligned for every table", () => {
+  expect(css).toContain("grid-template-columns: 360px minmax(0, 1fr);");
+  expect(css).toContain(".datasource-table-list {\n  width: 360px;");
+  expect(css).toContain(".datasource-detail {\n  min-width: 0;");
+  expect(css).toContain(".datasource-detail .panel-header {\n  min-width: 0;");
+});

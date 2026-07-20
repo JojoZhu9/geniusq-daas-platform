@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { api } from "../api/client";
 import { AnalysisChart } from "../components/AnalysisChart";
 import { RequirementBadge } from "../components/RequirementBadge";
@@ -80,6 +80,8 @@ export function DashboardWorkspace() {
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [blankDropTarget, setBlankDropTarget] = useState<DashboardCard["layout"] | null>(null);
   const [filters, setFilters] = useState({ year: "", district: "", metric: "" });
+  const [isCreatingDashboard, setIsCreatingDashboard] = useState(false);
+  const [newDashboardName, setNewDashboardName] = useState("房价分析看板");
   const dragSession = useRef<string | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const filterOptions = useMemo(
@@ -122,10 +124,21 @@ export function DashboardWorkspace() {
     };
   }, [dashboard, draggedCardId]);
 
-  async function create() {
-    const next = await api.post<Dashboard>("/api/dashboards", { name: "房价分析看板" });
+  function startCreate() {
+    const nextIndex = dashboards.length + 1;
+    setNewDashboardName(nextIndex > 1 ? `房价分析看板 ${nextIndex}` : "房价分析看板");
+    setIsCreatingDashboard(true);
+  }
+
+  async function create(event?: FormEvent) {
+    event?.preventDefault();
+    const name = newDashboardName.trim() || `房价分析看板 ${dashboards.length + 1}`;
+    const next = await api.post<Dashboard>("/api/dashboards", { name });
     setDashboards((items) => [...items, next]);
     setDashboard(next);
+    setIsCreatingDashboard(false);
+    setNewDashboardName("");
+    setNotice(`已创建“${next.name}”`);
   }
 
   async function resize(card: DashboardCard) {
@@ -268,11 +281,27 @@ export function DashboardWorkspace() {
             </select>
           </label>
         )}
-        <button type="button" className="secondary-button" onClick={create}>新建仪表盘</button>
+        {isCreatingDashboard ? (
+          <form className="dashboard-create-form" onSubmit={create}>
+            <label>
+              仪表盘名称
+              <input
+                aria-label="仪表盘名称"
+                value={newDashboardName}
+                onChange={(event) => setNewDashboardName(event.target.value)}
+                autoFocus
+              />
+            </label>
+            <button type="submit" className="primary-button">创建</button>
+            <button type="button" className="secondary-button" onClick={() => setIsCreatingDashboard(false)}>取消</button>
+          </form>
+        ) : (
+          <button type="button" className="secondary-button" onClick={startCreate}>新建仪表盘</button>
+        )}
       </div>
       {notice && <div className="inline-alert">{notice}</div>}
       {!dashboard ? (
-        <div className="panel dashboard-empty"><div className="empty-illustration">▦</div><h2>还没有仪表盘</h2><p>从智能问数结果添加图表，或先创建一个空白看板。</p><button className="primary-button" type="button" onClick={create}>创建房价分析看板</button></div>
+        <div className="panel dashboard-empty"><div className="empty-illustration">▦</div><h2>还没有仪表盘</h2><p>从智能问数结果添加图表，或先创建一个空白看板。</p><button className="primary-button" type="button" onClick={startCreate}>创建仪表盘</button></div>
       ) : (
         <>
           <div className="dashboard-summary panel"><div><small>卡片数量</small><strong>{dashboard.cards.length}</strong></div><div><small>布局规格</small><strong>两列 · 12 列栅格</strong></div><div><small>分享标识</small><strong>{dashboard.share_id.slice(0, 8)}</strong></div><RequirementBadge id="2.6" /></div>

@@ -112,6 +112,29 @@ export type Dashboard = {
   requirement_ids: string[];
 };
 
+export type ConversationSummary = {
+  id: string;
+  title: string;
+  latest_question: string | null;
+  latest_status: "needs_clarification" | "completed" | null;
+  analysis_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConversationDetail = {
+  id: string;
+  context: QueryContext;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  exchanges: {
+    question: string;
+    response: AnalysisResponse;
+    created_at: string;
+  }[];
+};
+
 export type Requirement = {
   id: string;
   original: string;
