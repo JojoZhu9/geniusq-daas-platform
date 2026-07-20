@@ -1,6 +1,22 @@
 from sqlalchemy import text
 
 
+def test_default_domain_config_exposes_real_estate_tables():
+    from app.domain import get_default_domain_config
+
+    config = get_default_domain_config()
+
+    assert "house_price_monthly" in config.allowed_tables
+    assert "海淀区" in config.districts
+    candidate_fields = {
+        field
+        for _, candidates in config.chart_field_priority
+        for field in candidates
+    }
+    assert "avg_price" in candidate_fields
+    assert config.tool_labels["knowledge_retriever"] == "知识库检索工具"
+
+
 def test_incomplete_question_returns_recommendations_without_querying(client):
     conversation = client.post("/api/conversations").json()
 

@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.domain import get_default_domain_config
 from app.errors import ApiError
 from app.schemas import AnalysisPlan, ChartSpec, QueryContext
 from app.services.analysis import DeepSeekAnalysisEngine, OfflineAnalysisEngine
@@ -22,45 +23,12 @@ from app.services.sql_guard import (
 )
 
 
-ALLOWED_TABLES = {
-    "house_price_monthly",
-    "housing_transactions",
-    "district_population",
-    "commuting_metrics",
-}
-DISTRICTS = ("海淀区", "朝阳区", "西城区", "东城区", "丰台区", "通州区")
-RELATIVE_YEAR_OFFSETS = (
-    (("前年",), -2),
-    (("上一年", "前一年", "去年", "上年"), -1),
-    (("下一年", "后一年", "明年", "下年"), 1),
-    (("今年", "本年"), 0),
-)
-CHART_FIELD_PRIORITY = (
-    (("租金", "rent"), ("rent_price",)),
-    (("挂牌", "房源"), ("listing_count",)),
-    (("空置",), ("vacancy_rate",)),
-    (("成交", "交易"), ("transaction_count", "avg_transaction_price", "new_house_count", "second_hand_count")),
-    (("新房",), ("new_house_count",)),
-    (("二手",), ("second_hand_count",)),
-    (("收入",), ("median_income",)),
-    (("家庭", "户数"), ("household_count",)),
-    (("人口",), ("resident_population", "growth_rate")),
-    (("地铁", "轨道"), ("metro_coverage_rate",)),
-    (("就业",), ("employment_density",)),
-    (("通勤",), ("avg_commute_minutes", "cross_district_ratio")),
-    (("同比",), ("yoy_change",)),
-    (("环比",), ("mom_change",)),
-    (("房价", "均价", "价格"), ("avg_price",)),
-)
-TOOL_LABELS = {
-    "intent_parser": "问题理解器",
-    "conversation_context": "会话上下文管理器",
-    "knowledge_retriever": "知识库检索工具",
-    "schema_selector": "数据表字段选择器",
-    "deepseek_chat_completion": "DeepSeek SQL 生成工具",
-    "sql_guard": "只读 SQL 安全校验器",
-    "sqlite_query_runner": "SQLite 查询与图表工具",
-}
+DOMAIN_CONFIG = get_default_domain_config()
+ALLOWED_TABLES = DOMAIN_CONFIG.allowed_tables
+DISTRICTS = DOMAIN_CONFIG.districts
+RELATIVE_YEAR_OFFSETS = DOMAIN_CONFIG.relative_year_offsets
+CHART_FIELD_PRIORITY = DOMAIN_CONFIG.chart_field_priority
+TOOL_LABELS = DOMAIN_CONFIG.tool_labels
 
 
 def utc_now() -> str:
@@ -304,15 +272,7 @@ def _repair_chart(
 
 
 def _field_unit(field: str) -> str | None:
-    if field in {"avg_price", "rent_price", "avg_transaction_price"}:
-        return "元/平方米"
-    if field in {"mom_change", "yoy_change", "growth_rate", "vacancy_rate", "metro_coverage_rate", "cross_district_ratio"}:
-        return "%"
-    if field in {"transaction_count", "listing_count", "resident_population", "household_count", "new_house_count", "second_hand_count"}:
-        return "数量"
-    if field in {"avg_commute_minutes"}:
-        return "分钟"
-    return None
+    return DOMAIN_CONFIG.field_units.get(field)
 
 
 def _recommend_reason(chart_type: str, x_field: str) -> str:
