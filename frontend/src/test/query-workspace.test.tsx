@@ -168,7 +168,7 @@ test("submits an incomplete question and offers clickable suggestions", async ()
   await userEvent.click(screen.getByRole("button", { name: "发送" }));
 
   expect(await screen.findByRole("button", { name: "分析2025年各区平均房价" })).toBeVisible();
-  expect(screen.getByRole("link", { name: "需求 2.2" })).toBeVisible();
+  expect(screen.queryByRole("link", { name: /需求/ })).not.toBeInTheDocument();
   expect(screen.queryByText("SQL 查询")).not.toBeInTheDocument();
 });
 
@@ -278,6 +278,7 @@ test("restores a saved conversation from the history list", async () => {
 });
 
 test("deletes a saved conversation and starts a fresh conversation when it was active", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
   let conversations = [{
     id: "c-old",
     title: "2025区域房价分析",
@@ -336,7 +337,37 @@ test("deletes a saved conversation and starts a fresh conversation when it was a
   ));
 });
 
+test("does not delete a saved conversation when the user cancels confirmation", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(false);
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations" && init?.method === "POST") return json({ id: "c-new" }, 201);
+    if (path === "/api/conversations" && (!init?.method || init.method === "GET")) return json([{
+      id: "c-old",
+      title: "2025区域房价分析",
+      latest_question: "只看海淀区",
+      latest_status: "completed",
+      analysis_count: 2,
+      created_at: "2026-07-14T00:00:00+08:00",
+      updated_at: "2026-07-14T00:03:00+08:00"
+    }]);
+    if (path === "/api/model-settings") return json(defaultModelSettings);
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace();
+  await userEvent.click(await screen.findByRole("button", { name: "删除会话：2025区域房价分析" }));
+
+  expect(fetchMock).not.toHaveBeenCalledWith(
+    "/api/conversations/c-old",
+    expect.objectContaining({ method: "DELETE" })
+  );
+  expect(screen.getByRole("button", { name: "打开会话：2025区域房价分析" })).toBeVisible();
+});
+
 test("clears all saved conversations from the history panel", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
   let conversations = [{
     id: "c-old",
     title: "历史房价分析",
@@ -369,6 +400,36 @@ test("clears all saved conversations from the history panel", async () => {
     "/api/conversations",
     expect.objectContaining({ method: "DELETE" })
   );
+});
+
+test("does not clear saved conversations when the user cancels confirmation", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(false);
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/conversations" && init?.method === "POST") return json({ id: "c-new" }, 201);
+    if (path === "/api/conversations" && (!init?.method || init.method === "GET")) return json([{
+      id: "c-old",
+      title: "历史房价分析",
+      latest_question: "继续看朝阳区",
+      latest_status: "completed",
+      analysis_count: 3,
+      created_at: "2026-07-14T00:00:00+08:00",
+      updated_at: "2026-07-14T00:05:00+08:00"
+    }]);
+    if (path === "/api/model-settings") return json(defaultModelSettings);
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace();
+  await screen.findByRole("button", { name: "打开会话：历史房价分析" });
+  await userEvent.click(screen.getByRole("button", { name: "清空历史" }));
+
+  expect(fetchMock).not.toHaveBeenCalledWith(
+    "/api/conversations",
+    expect.objectContaining({ method: "DELETE" })
+  );
+  expect(screen.getByRole("button", { name: "打开会话：历史房价分析" })).toBeVisible();
 });
 
 test("expands auditable steps and saves the chart to a dashboard", async () => {

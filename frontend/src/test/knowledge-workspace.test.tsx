@@ -33,7 +33,7 @@ test("shows that private knowledge overrides a public match", async () => {
 
   expect(screen.getByText("私有知识优先")).toBeVisible();
   expect(screen.getByText("公开条目被覆盖")).toBeVisible();
-  expect(screen.getByRole("link", { name: "需求 3.2" })).toBeVisible();
+  expect(screen.queryByRole("link", { name: /需求/ })).not.toBeInTheDocument();
   expect(screen.getAllByText("house_price_monthly").length).toBeGreaterThan(0);
 });
 

@@ -14,11 +14,11 @@ export function DataSourcePanel({ datasets, queries }: { datasets: Dataset[]; qu
       <div className="panel-header">
         <div><small>分析依据</small><h2>数据来源与 SQL</h2></div>
       </div>
-      {!datasets.length && <div className="source-empty">完成查询后，这里会展示数据血缘和只读 SQL。</div>}
+      {!datasets.length && <div className="source-empty">完成查询后，这里会展示数据表血缘和只读 SQL。</div>}
       {datasets.map((dataset) => (
         <article className="source-card" key={dataset.source}>
           <div className="source-title"><span className="source-icon">DB</span><strong>{dataset.source}</strong></div>
-          <a href={`/requirements?id=2.1-b`}>{dataset.table}</a>
+          <span className="source-table-name">{dataset.table}</span>
           <dl>
             <div><dt>更新</dt><dd>{new Date(dataset.updated_at).toLocaleDateString("zh-CN")}</dd></div>
             <div><dt>置信度</dt><dd>{Math.round(dataset.confidence * 100)}%</dd></div>

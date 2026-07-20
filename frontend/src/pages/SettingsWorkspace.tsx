@@ -1,12 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "../api/client";
+import { DEFAULT_DEEPSEEK_BASE_URL, DEFAULT_DEEPSEEK_MODEL } from "../config/modelDefaults";
 import type { DeepSeekConnectionTest, ModelSettings } from "../types";
 
 export function SettingsWorkspace() {
   const [settings, setSettings] = useState<ModelSettings | null>(null);
   const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState("https://api.deepseek.com");
-  const [model, setModel] = useState("deepseek-chat");
+  const [baseUrl, setBaseUrl] = useState(DEFAULT_DEEPSEEK_BASE_URL);
+  const [model, setModel] = useState(DEFAULT_DEEPSEEK_MODEL);
   const [notice, setNotice] = useState("");
   const [noticeKind, setNoticeKind] = useState<"success" | "error">("success");
   const [testing, setTesting] = useState(false);
@@ -14,8 +15,8 @@ export function SettingsWorkspace() {
   async function load() {
     const next = await api.get<ModelSettings>("/api/model-settings");
     setSettings(next);
-    setBaseUrl(next.deepseek_base_url || "https://api.deepseek.com");
-    setModel(next.deepseek_model || "deepseek-chat");
+    setBaseUrl(next.deepseek_base_url || DEFAULT_DEEPSEEK_BASE_URL);
+    setModel(next.deepseek_model || DEFAULT_DEEPSEEK_MODEL);
   }
 
   useEffect(() => { void load(); }, []);

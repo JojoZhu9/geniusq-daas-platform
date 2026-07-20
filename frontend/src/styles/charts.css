@@ -1,0 +1,18 @@
+.analysis-chart { margin: 0 14px 14px; border: 1px solid #e3e9f0; border-radius: 5px; }
+.chart-toolbar { padding: 10px 12px; border-bottom: 1px solid #edf0f4; }
+.chart-toolbar small { color: #8695a6; font-size: 10px; }
+.chart-toolbar h3 { margin: 2px 0 0; font-size: 13px; }
+.chart-stage { position: relative; min-height: 96px; background: linear-gradient(180deg, #fff, #fbfdff); }
+.chart-switching { position: absolute; z-index: 2; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; color: #52677c; background: rgba(255,255,255,.88); font-size: 11px; }
+.chart-spinner { width: 18px; height: 18px; }
+.echart-view { width: 100%; height: 280px; background: linear-gradient(180deg, #fff, #fbfdff); }
+.chart-fallback, .table-empty { padding: 32px 12px; color: #8695a6; text-align: center; }
+.chart-footnote { margin: 0; padding: 8px 12px; border-top: 1px solid #edf0f4; color: #8a98a8; font-size: 9px; }
+.table-scroll { overflow: auto; max-height: 280px; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.data-table th, .data-table td { padding: 7px 9px; border-bottom: 1px solid #edf0f3; text-align: left; }
+.data-table th { color: #546a81; background: #f7f9fb; }
+.dashboard-chart-shell .analysis-chart, .shared-chart-shell .analysis-chart { margin: 0; border: 0; border-radius: 0; }
+.dashboard-chart-shell .echart-view, .shared-chart-shell .echart-view { height: 150px; }
+.dashboard-chart-shell .table-scroll, .shared-chart-shell .table-scroll { height: 150px; max-height: 150px; }
+.dashboard-chart-shell .chart-toolbar, .shared-chart-shell .chart-toolbar { padding: 8px 12px; }

@@ -99,7 +99,14 @@ export function DashboardWorkspace() {
     event?.preventDefault();
     if (!dashboard) return;
     const name = renameDashboardName.trim();
-    if (!name) return;
+    if (!name) {
+      setNotice("仪表盘名称不能为空");
+      return;
+    }
+    if (dashboards.some((item) => item.id !== dashboard.id && item.name === name)) {
+      setNotice("仪表盘名称已存在，请换一个名称");
+      return;
+    }
     const next = await api.patch<Dashboard>(`/api/dashboards/${dashboard.id}`, { name });
     setDashboard(next);
     setDashboards((items) => items.map((item) => item.id === next.id ? next : item));

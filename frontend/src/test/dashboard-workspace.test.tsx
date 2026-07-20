@@ -118,6 +118,56 @@ test("renames the selected dashboard", async () => {
   );
 });
 
+test("does not rename a dashboard with a blank name", async () => {
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([dashboard]);
+    if (path === "/api/dashboards/d1" && init?.method === "PATCH") {
+      return json({ code: "SHOULD_NOT_CALL" }, 500);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace(<DashboardWorkspace />);
+  await screen.findByRole("heading", { name: "房价分析看板" });
+  await userEvent.click(screen.getByRole("button", { name: "重命名仪表盘" }));
+  await userEvent.clear(screen.getByLabelText("新仪表盘名称"));
+  await userEvent.click(screen.getByRole("button", { name: "保存名称" }));
+
+  expect(await screen.findByText("仪表盘名称不能为空")).toBeVisible();
+  expect(fetchMock).not.toHaveBeenCalledWith(
+    "/api/dashboards/d1",
+    expect.objectContaining({ method: "PATCH" })
+  );
+});
+
+test("does not rename a dashboard to an existing dashboard name", async () => {
+  const otherDashboard = { ...dashboard, id: "d2", name: "成交看板", share_id: "share-2", share_url: "/share/share-2", cards: [] };
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/dashboards" && !init?.method) return json([dashboard, otherDashboard]);
+    if (path === "/api/dashboards/d1" && init?.method === "PATCH") {
+      return json({ code: "SHOULD_NOT_CALL" }, 500);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  renderWorkspace(<DashboardWorkspace />);
+  await screen.findByRole("heading", { name: "房价分析看板" });
+  await userEvent.click(screen.getByRole("button", { name: "重命名仪表盘" }));
+  await userEvent.clear(screen.getByLabelText("新仪表盘名称"));
+  await userEvent.type(screen.getByLabelText("新仪表盘名称"), "成交看板");
+  await userEvent.click(screen.getByRole("button", { name: "保存名称" }));
+
+  expect(await screen.findByText("仪表盘名称已存在，请换一个名称")).toBeVisible();
+  expect(fetchMock).not.toHaveBeenCalledWith(
+    "/api/dashboards/d1",
+    expect.objectContaining({ method: "PATCH" })
+  );
+});
+
 test("persists a resized dashboard card", async () => {
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);

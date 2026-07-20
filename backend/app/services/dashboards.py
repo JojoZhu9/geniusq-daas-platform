@@ -8,6 +8,13 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.repositories.dashboards import (
+    dashboard_name_exists,
+    select_dashboard_id_by_share,
+    select_dashboard_ids,
+    select_dashboard_row,
+)
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -31,9 +38,7 @@ def _serialize_card(row: Any) -> dict[str, Any]:
 
 
 def get_dashboard(session: Session, dashboard_id: str) -> dict[str, Any] | None:
-    row = session.execute(
-        text("SELECT * FROM dashboards WHERE id = :id"), {"id": dashboard_id}
-    ).mappings().first()
+    row = select_dashboard_row(session, dashboard_id)
     if row is None:
         return None
     dashboard = dict(row)
@@ -55,17 +60,12 @@ def get_dashboard(session: Session, dashboard_id: str) -> dict[str, Any] | None:
 
 
 def get_dashboard_by_share(session: Session, share_id: str) -> dict[str, Any] | None:
-    row = session.execute(
-        text("SELECT id FROM dashboards WHERE share_id = :share_id"),
-        {"share_id": share_id},
-    ).mappings().first()
-    return get_dashboard(session, row["id"]) if row else None
+    dashboard_id = select_dashboard_id_by_share(session, share_id)
+    return get_dashboard(session, dashboard_id) if dashboard_id else None
 
 
 def list_dashboards(session: Session) -> list[dict[str, Any]]:
-    ids = session.execute(
-        text("SELECT id FROM dashboards ORDER BY updated_at DESC")
-    ).scalars().all()
+    ids = select_dashboard_ids(session)
     return [get_dashboard(session, dashboard_id) for dashboard_id in ids]
 
 

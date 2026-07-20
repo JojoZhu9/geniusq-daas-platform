@@ -8,6 +8,11 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.repositories.conversations import (
+    clear_conversation_tree,
+    conversation_exists,
+    delete_conversation_tree,
+)
 from app.schemas import QueryContext
 
 
@@ -143,30 +148,13 @@ def get_conversation_history(session: Session, conversation_id: str) -> dict[str
 
 
 def delete_conversation(session: Session, conversation_id: str) -> bool:
-    conversation = session.execute(
-        text("SELECT id FROM conversations WHERE id = :id"),
-        {"id": conversation_id},
-    ).mappings().first()
-    if conversation is None:
+    if not conversation_exists(session, conversation_id):
         return False
-    session.execute(
-        text("DELETE FROM analysis_runs WHERE conversation_id = :conversation_id"),
-        {"conversation_id": conversation_id},
-    )
-    session.execute(
-        text("DELETE FROM messages WHERE conversation_id = :conversation_id"),
-        {"conversation_id": conversation_id},
-    )
-    session.execute(
-        text("DELETE FROM conversations WHERE id = :id"),
-        {"id": conversation_id},
-    )
+    delete_conversation_tree(session, conversation_id)
     session.commit()
     return True
 
 
 def clear_conversations(session: Session) -> None:
-    session.execute(text("DELETE FROM analysis_runs"))
-    session.execute(text("DELETE FROM messages"))
-    session.execute(text("DELETE FROM conversations"))
+    clear_conversation_tree(session)
     session.commit()

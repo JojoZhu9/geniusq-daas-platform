@@ -193,4 +193,5 @@ export type DeepSeekConnectionTest = {
   ok: boolean;
   mode: string;
   message: string;
+  error_type?: "missing_api_key" | "timeout" | "auth_error" | "rate_limited" | "network_error" | "provider_error";
 };

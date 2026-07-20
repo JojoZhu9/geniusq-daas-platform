@@ -6,31 +6,16 @@ import { AnalysisChart } from "../../components/AnalysisChart";
 import { DataSourcePanel } from "../../components/DataSourcePanel";
 import { RequirementBadge } from "../../components/RequirementBadge";
 import { ThinkingTimeline } from "../../components/ThinkingTimeline";
-import type { AnalysisResponse, ChartSpec, ConversationDetail, ConversationSummary, Dashboard } from "../../types";
+import { DEFAULT_DEEPSEEK_MODEL } from "../../config/modelDefaults";
+import type { AnalysisResponse, ChartSpec, ConversationDetail, ConversationSummary } from "../../types";
 import { ConversationHistoryPanel } from "./components/ConversationHistoryPanel";
-import { ModelConfigStrip, type ModelSettings } from "./components/ModelConfigStrip";
+import { ModelConfigStrip } from "./components/ModelConfigStrip";
+import { QueryComposer } from "./components/QueryComposer";
+import { useDashboardSave } from "./hooks/useDashboardSave";
+import { useModelSettings } from "./hooks/useModelSettings";
 import { LIVE_STEPS, liveThinkingSteps } from "./queryUtils";
 
 type Exchange = { question: string; response: AnalysisResponse };
-
-function nextDashboardCardLayout(cards: Dashboard["cards"]) {
-  const width = 6;
-  const height = 4;
-  const overlaps = (x: number, y: number) => cards.some((card) => (
-    x < card.layout.x + card.layout.w
-    && x + width > card.layout.x
-    && y < card.layout.y + card.layout.h
-    && y + height > card.layout.y
-  ));
-
-  for (let row = 0; row <= cards.length; row += 1) {
-    const y = row * height;
-    for (const x of [0, 6]) {
-      if (!overlaps(x, y)) return { x, y, w: width, h: height };
-    }
-  }
-  return { x: 0, y: cards.length * height, w: width, h: height };
-}
 
 export function QueryWorkspace() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -41,10 +26,6 @@ export function QueryWorkspace() {
   const [thinkingCollapsed, setThinkingCollapsed] = useState(false);
   const [pendingQuestion, setPendingQuestion] = useState("");
   const [liveStepIndex, setLiveStepIndex] = useState(0);
-  const [modelSettings, setModelSettings] = useState<ModelSettings | null>(null);
-  const [showModelSettings, setShowModelSettings] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [modelInput, setModelInput] = useState("deepseek-v4-flash");
   const [notice, setNotice] = useState("");
   const [initError, setInitError] = useState("");
   const [chartTypes, setChartTypes] = useState<Record<string, ChartSpec["type"]>>({});
@@ -53,6 +34,17 @@ export function QueryWorkspace() {
   const [conversationHistoryError, setConversationHistoryError] = useState("");
   const latest = history.at(-1)?.response;
   const liveSteps = useMemo(() => liveThinkingSteps(liveStepIndex), [liveStepIndex]);
+  const {
+    modelSettings,
+    showModelSettings,
+    apiKeyInput,
+    modelInput,
+    setShowModelSettings,
+    setApiKeyInput,
+    setModelInput,
+    saveModelSettings
+  } = useModelSettings(setNotice);
+  const saveToDashboard = useDashboardSave(latest, chartTypes, setNotice);
 
   async function loadConversations() {
     try {
@@ -70,12 +62,6 @@ export function QueryWorkspace() {
       .then((value) => setConversationId(value.id))
       .catch(() => setInitError("无法初始化本地会话，请确认后端服务已启动。"));
     loadConversations();
-    api.get<ModelSettings>("/api/model-settings")
-      .then((settings) => {
-        setModelSettings(settings);
-        setModelInput(settings.deepseek_model || "deepseek-v4-flash");
-      })
-      .catch(() => setModelSettings(null));
   }, []);
 
   useEffect(() => {
@@ -135,6 +121,7 @@ export function QueryWorkspace() {
   }
 
   async function deleteConversation(id: string) {
+    if (!window.confirm("确认删除该历史会话吗？")) return;
     await api.delete(`/api/conversations/${id}`);
     setConversations((items) => items.filter((item) => item.id !== id));
     if (id === conversationId) {
@@ -150,6 +137,7 @@ export function QueryWorkspace() {
   }
 
   async function clearConversationHistory() {
+    if (!window.confirm("确认清空全部历史会话吗？此操作不可恢复。")) return;
     await api.delete("/api/conversations");
     const next = await api.post<{ id: string }>("/api/conversations");
     setConversationId(next.id);
@@ -179,22 +167,6 @@ export function QueryWorkspace() {
     }
   }
 
-  async function saveToDashboard() {
-    if (!latest?.chart) return;
-    const dashboards = await api.get<Dashboard[]>("/api/dashboards");
-    const dashboard = dashboards[0] ?? await api.post<Dashboard>("/api/dashboards", { name: "房价分析看板" });
-    await api.post(`/api/dashboards/${dashboard.id}/cards`, {
-      title: latest.chart.title,
-      analysis_id: latest.analysis_id,
-      chart: {
-        ...latest.chart,
-        type: chartTypes[latest.analysis_id] ?? latest.chart.type
-      },
-      layout: nextDashboardCardLayout(dashboard.cards)
-    });
-    setNotice(`已加入“${dashboard.name}”`);
-  }
-
   async function saveFeedback(analysisId: string, saveAsExample = false) {
     await api.post(`/api/analysis/${analysisId}/feedback`, {
       rating: "correct",
@@ -202,19 +174,6 @@ export function QueryWorkspace() {
       save_as_example: saveAsExample
     });
     setNotice(saveAsExample ? "反馈已保存，并已收藏为 SQL 示例" : "反馈已保存");
-  }
-
-  async function saveModelSettings(event: FormEvent) {
-    event.preventDefault();
-    const settings = await api.post<ModelSettings>("/api/model-settings/deepseek", {
-      api_key: apiKeyInput.trim(),
-      base_url: modelSettings?.deepseek_base_url || "https://api.deepseek.com",
-      model: modelInput.trim() || "deepseek-v4-flash"
-    });
-    setModelSettings(settings);
-    setApiKeyInput("");
-    setShowModelSettings(false);
-    setNotice("DeepSeek API Key 已配置，本次本地后端运行生效");
   }
 
   const error = askMutation.error instanceof ApiClientError
@@ -291,7 +250,7 @@ export function QueryWorkspace() {
                           <div>
                             <small>当前模式</small>
                             <strong>DeepSeek Text-to-SQL</strong>
-                            <span>{exchange.response.metadata.model ?? "deepseek-v4-flash"}</span>
+                            <span>{exchange.response.metadata.model ?? DEFAULT_DEEPSEEK_MODEL}</span>
                           </div>
                           <div>
                             <small>SQL 校验</small>
@@ -377,10 +336,12 @@ export function QueryWorkspace() {
           </div>
 
           {(notice || error || initError) && <div className={error || initError ? "inline-alert error" : "inline-alert"}>{error || initError || notice}</div>}
-          <form className="question-composer" onSubmit={submit}>
-            <textarea aria-label="问题" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="请输入想分析的问题" rows={2} />
-            <div className="composer-footer"><span>Enter 发送 · 所有查询均为只读</span><button className="send-button" type="submit" disabled={!question.trim() || askMutation.isPending}>发送</button></div>
-          </form>
+          <QueryComposer
+            question={question}
+            isPending={askMutation.isPending}
+            onQuestionChange={setQuestion}
+            onSubmit={submit}
+          />
         </main>
         <DataSourcePanel datasets={latest?.datasets ?? []} queries={latest?.queries ?? []} />
       </div>

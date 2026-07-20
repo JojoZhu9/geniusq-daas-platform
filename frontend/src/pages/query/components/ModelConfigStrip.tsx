@@ -1,4 +1,5 @@
 import type { FormEvent } from "react";
+import { DEFAULT_DEEPSEEK_MODEL } from "../../../config/modelDefaults";
 
 export type ModelSettings = {
   llm_mode: string;
@@ -63,7 +64,7 @@ export function ModelConfigStrip({
                 aria-label="DeepSeek 模型"
                 value={modelInput}
                 onChange={(event) => onModelChange(event.target.value)}
-                placeholder="deepseek-v4-flash"
+                placeholder={DEFAULT_DEEPSEEK_MODEL}
               />
             </label>
             <div>
@@ -76,4 +77,3 @@ export function ModelConfigStrip({
     </>
   );
 }
-

@@ -3,6 +3,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.domain.model_defaults import DEFAULT_DEEPSEEK_BASE_URL, DEFAULT_DEEPSEEK_MODEL
+
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 RUNTIME_DIR = BACKEND_DIR / "runtime"
@@ -18,8 +20,8 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = ""
     deepseek_api_key: str = ""
-    deepseek_base_url: str = "https://api.deepseek.com"
-    deepseek_model: str = "deepseek-v4-flash"
+    deepseek_base_url: str = DEFAULT_DEEPSEEK_BASE_URL
+    deepseek_model: str = DEFAULT_DEEPSEEK_MODEL
     deepseek_timeout_seconds: int = 30
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

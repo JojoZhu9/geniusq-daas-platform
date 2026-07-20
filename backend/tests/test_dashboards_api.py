@@ -56,6 +56,25 @@ def test_dashboard_can_be_renamed(client):
     assert client.get(f"/api/dashboards/share/{dashboard['share_id']}").json()["name"] == "2025区域成交看板"
 
 
+def test_dashboard_rename_rejects_blank_name(client):
+    dashboard = client.post("/api/dashboards", json={"name": "旧名称"}).json()
+
+    response = client.patch(f"/api/dashboards/{dashboard['id']}", json={"name": "   "})
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "DASHBOARD_NAME_EMPTY"
+
+
+def test_dashboard_rename_rejects_duplicate_name(client):
+    first = client.post("/api/dashboards", json={"name": "区域看板"}).json()
+    client.post("/api/dashboards", json={"name": "成交看板"})
+
+    response = client.patch(f"/api/dashboards/{first['id']}", json={"name": "成交看板"})
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "DASHBOARD_NAME_DUPLICATE"
+
+
 def test_dashboard_and_share_reuse_the_saved_analysis_datasets(client):
     conversation = client.post("/api/conversations").json()
     analysis = client.post(

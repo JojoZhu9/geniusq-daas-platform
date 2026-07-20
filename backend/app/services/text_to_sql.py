@@ -19,6 +19,13 @@ class ModelOutputError(ValueError):
     """Raised when the model response cannot be parsed as the required JSON."""
 
 
+class DeepSeekProviderError(RuntimeError):
+    def __init__(self, error_type: str, message: str) -> None:
+        super().__init__(message)
+        self.error_type = error_type
+        self.message = message
+
+
 def parse_model_json(content: str) -> dict[str, Any]:
     cleaned = content.strip()
     fence = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", cleaned, flags=re.DOTALL)
@@ -68,16 +75,7 @@ class DeepSeekTextToSqlService:
             "response_format": {"type": "json_object"},
             "max_tokens": 1200,
         }
-        response = self.client.post(
-            f"{self.base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=self.timeout_seconds,
-        )
-        response.raise_for_status()
+        response = self._post(payload)
         raw = response.json()
         content = raw["choices"][0]["message"]["content"]
         parsed = parse_model_json(content)
@@ -114,20 +112,36 @@ class DeepSeekTextToSqlService:
             "response_format": {"type": "json_object"},
             "max_tokens": 1200,
         }
-        response = self.client.post(
-            f"{self.base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=self.timeout_seconds,
-        )
-        response.raise_for_status()
+        response = self._post(payload)
         raw = response.json()
         content = raw["choices"][0]["message"]["content"]
         parsed = parse_model_json(content)
         return self._normalize_result(parsed, knowledge)
+
+    def _post(self, payload: dict[str, Any]) -> httpx.Response:
+        try:
+            response = self.client.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+            return response
+        except httpx.TimeoutException as exc:
+            raise DeepSeekProviderError("timeout", "DeepSeek 请求超时，请检查网络或稍后重试。") from exc
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
+            if status_code in (401, 403):
+                raise DeepSeekProviderError("auth_error", "DeepSeek 鉴权失败，请检查 API Key 是否正确。") from exc
+            if status_code == 429:
+                raise DeepSeekProviderError("rate_limited", "DeepSeek 请求被限流，请稍后重试。") from exc
+            raise DeepSeekProviderError("provider_error", f"DeepSeek 服务返回异常状态码：{status_code}。") from exc
+        except httpx.HTTPError as exc:
+            raise DeepSeekProviderError("network_error", "DeepSeek 网络连接失败，请检查 Base URL 和本地网络。") from exc
 
     @staticmethod
     def _system_prompt() -> str:

@@ -12,7 +12,7 @@ from app.schemas import (
 )
 from app.services.retrieval import retrieve_relevant_knowledge
 from app.services.semantic import retrieve_semantic_metrics
-from app.services.text_to_sql import DeepSeekTextToSqlService
+from app.services.text_to_sql import DeepSeekProviderError, DeepSeekTextToSqlService
 
 
 class OfflineAnalysisEngine:
@@ -221,6 +221,13 @@ class DeepSeekAnalysisEngine:
         metrics = retrieve_semantic_metrics(self.session, question)
         try:
             result = self.service.generate(question, context, knowledge, metrics)
+        except DeepSeekProviderError as exc:
+            raise ApiError(
+                503,
+                f"DEEPSEEK_{exc.error_type.upper()}",
+                exc.message,
+                "请检查 DeepSeek 配置，或临时切换为离线规则模式。",
+            ) from exc
         except TypeError as exc:
             if "positional" not in str(exc) and "argument" not in str(exc):
                 raise

@@ -61,7 +61,7 @@ export function DashboardManagementBar({
               autoFocus
             />
           </label>
-          <button type="submit" className="primary-button" disabled={!renameDashboardName.trim()}>保存名称</button>
+          <button type="submit" className="primary-button">保存名称</button>
           <button type="button" className="secondary-button" onClick={onCancelRename}>取消</button>
         </form>
       ) : isCreatingDashboard ? (
