@@ -1,5 +1,19 @@
 # GeniusQ DaaS Intelligent Query Demo
 
+[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](backend/pyproject.toml)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](backend/pyproject.toml)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](frontend/package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9%2B-3178C6?logo=typescript&logoColor=white)](frontend/package.json)
+![License: No license](https://img.shields.io/badge/License-No%20license-lightgrey)
+
+> **English:** A local full-stack demonstration of schema-aware natural-language data querying, Text-to-SQL guardrails, retrieval context, and dashboard workflows. Offline mode works without an API key; DeepSeek mode requires your own key.
+>
+> **Chinese / 中文：** 本地全栈智能问数演示，支持基于 Schema 的自然语言查询、Text-to-SQL 安全校验、知识检索和仪表盘。离线模式无需 API Key；DeepSeek 模式需要使用你自己的 Key。
+
+**Navigate:** [English](#english) | [中文](#中文说明) | [Screenshots](#screenshots) | [Quick start](#run-locally) | [Architecture](#architecture) | [Testing](#tests)
+
+> **Project context:** This is a team/course demonstration. Preserve existing team and course attribution in contributions and documentation; changes to this repository do not imply sole authorship.
+
 [中文](#中文说明) | [English](#english)
 
 ## 中文说明
@@ -176,8 +190,8 @@ powershell -ExecutionPolicy Bypass -File .\start-demo.ps1
 
 ```powershell
 python -m uvicorn backend.app.main:app --reload --port 8000
-npm --prefix frontend install
-npm --prefix frontend run dev
+npm.cmd --prefix frontend install
+npm.cmd --prefix frontend run dev
 ```
 
 访问地址：
@@ -208,9 +222,11 @@ DEEPSEEK_MODEL=deepseek-v4-flash
 
 ```powershell
 python -m pytest backend/tests -q
-npm --prefix frontend run test:run
-npm --prefix frontend run build
+npm.cmd --prefix frontend run test:run
+npm.cmd --prefix frontend run build
 ```
+
+In shells where `npm` resolves directly, the equivalents are `npm --prefix frontend run test:run` and `npm --prefix frontend run build`. In Windows PowerShell, prefer `npm.cmd` because some execution policies block `npm.ps1`.
 
 ---
 
@@ -225,6 +241,8 @@ The project does not depend on production data. Demo data is generated locally i
 #### 1. Intelligent Query Workspace
 
 After a user asks a natural-language question, the system displays an Agent-like execution flow: understanding the question, merging context, retrieving knowledge, selecting tables and fields, generating SQL, validating SQL, executing the query, and producing chart suggestions. The result area includes read-only SQL, data lineage, charts, conclusions, and suggested follow-up questions.
+
+<a id="screenshots"></a>
 
 ![Intelligent query result](docs/assets/readme/query-result.png)
 
@@ -388,8 +406,8 @@ You can also start backend and frontend separately:
 
 ```powershell
 python -m uvicorn backend.app.main:app --reload --port 8000
-npm --prefix frontend install
-npm --prefix frontend run dev
+npm.cmd --prefix frontend install
+npm.cmd --prefix frontend run dev
 ```
 
 URLs:
@@ -420,6 +438,8 @@ Without DeepSeek credentials, the system continues to work in offline rule-based
 
 ```powershell
 python -m pytest backend/tests -q
-npm --prefix frontend run test:run
-npm --prefix frontend run build
+npm.cmd --prefix frontend run test:run
+npm.cmd --prefix frontend run build
 ```
+
+In shells where `npm` resolves directly, the equivalents are `npm --prefix frontend run test:run` and `npm --prefix frontend run build`. In Windows PowerShell, prefer `npm.cmd` because some execution policies block `npm.ps1`.
