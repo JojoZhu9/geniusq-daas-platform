@@ -182,7 +182,7 @@ powershell -ExecutionPolicy Bypass -File .\start-demo.ps1
 也可以分别启动后端和前端：
 
 ```powershell
-python -m uvicorn backend.app.main:app --reload --port 8000
+python -m uvicorn app.main:app --app-dir backend --reload --port 8000
 npm --prefix frontend install
 npm --prefix frontend run dev
 ```
@@ -227,7 +227,7 @@ DeepSeek API Key：只放在 Render 环境变量中
 ```text
 Root Directory: 仓库根目录
 Build Command: pip install -e "backend[test]"
-Start Command: python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+Start Command: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
 Render 环境变量示例：
@@ -453,7 +453,7 @@ powershell -ExecutionPolicy Bypass -File .\start-demo.ps1
 You can also start backend and frontend separately:
 
 ```powershell
-python -m uvicorn backend.app.main:app --reload --port 8000
+python -m uvicorn app.main:app --app-dir backend --reload --port 8000
 npm --prefix frontend install
 npm --prefix frontend run dev
 ```
@@ -498,7 +498,7 @@ Render backend settings:
 ```text
 Root Directory: repository root
 Build Command: pip install -e "backend[test]"
-Start Command: python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+Start Command: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
 Render environment variables:
