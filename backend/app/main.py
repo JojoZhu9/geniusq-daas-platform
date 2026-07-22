@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .api.chat import router as chat_router
@@ -20,7 +21,16 @@ async def lifespan(_: FastAPI):
     yield
 
 
+settings = get_settings()
 app = FastAPI(title="GeniusQ DaaS Platform Intelligent Query Demo", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_origin_regex=settings.cors_origin_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(chat_router, prefix="/api", tags=["chat"])
 app.include_router(knowledge_router, prefix="/api", tags=["knowledge"])
 app.include_router(dashboards_router, prefix="/api", tags=["dashboards"])
@@ -37,3 +47,8 @@ def api_error_handler(_: Request, error: ApiError) -> JSONResponse:
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "mode": get_settings().llm_mode}
+
+
+@app.get("/")
+def root() -> dict[str, str]:
+    return health()
