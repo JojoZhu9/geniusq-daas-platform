@@ -46,6 +46,16 @@ def test_settings_default_to_offline_local_database():
     assert normalized_database_url.endswith("/backend/runtime/daas_demo.db")
     assert settings.llm_mode == "offline"
     assert settings.query_row_limit == 500
+    assert settings.cors_origin_list == ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def test_settings_parse_cors_origins_from_comma_separated_env(monkeypatch):
+    from app.config import Settings
+
+    monkeypatch.setenv("CORS_ORIGINS", "https://demo.vercel.app, https://preview.vercel.app ")
+    settings = Settings(_env_file=None)
+
+    assert settings.cors_origin_list == ["https://demo.vercel.app", "https://preview.vercel.app"]
 
 
 def test_get_session_yields_sqlalchemy_session():
@@ -66,3 +76,18 @@ def test_health_reports_offline_mode():
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "mode": "offline"}
+
+
+def test_cors_allows_default_local_frontend_origin():
+    from app.main import app
+
+    response = TestClient(app).options(
+        "/api/health",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"

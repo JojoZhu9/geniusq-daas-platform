@@ -211,6 +211,53 @@ DEEPSEEK_MODEL=deepseek-v4-flash
 
 不配置 DeepSeek 时，系统会使用本地离线规则继续演示。
 
+### Vercel + Render 部署
+
+推荐部署方式：
+
+```text
+Vercel：部署 frontend React 页面
+Render：部署 FastAPI 后端
+SQLite：暂时保留在 Render 后端运行目录
+DeepSeek API Key：只放在 Render 环境变量中
+```
+
+后端 Render 配置：
+
+```text
+Root Directory: 仓库根目录
+Build Command: pip install -e "backend[test]"
+Start Command: python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+```
+
+Render 环境变量示例：
+
+```env
+LLM_MODE=deepseek
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-flash
+CORS_ORIGINS=https://your-frontend.vercel.app,http://localhost:5173,http://127.0.0.1:5173
+```
+
+前端 Vercel 配置：
+
+```text
+Root Directory: frontend
+Build Command: npm run build
+Output Directory: dist
+```
+
+Vercel 环境变量示例：
+
+```env
+VITE_API_BASE_URL=https://your-backend.onrender.com
+```
+
+本地开发不需要设置 `VITE_API_BASE_URL`，前端仍会请求相对路径 `/api/...`，由 Vite proxy 转发到本地 FastAPI。部署到 Vercel 后，前端会自动把 API 请求发送到 `VITE_API_BASE_URL` 指向的 Render 后端。
+
+注意：Render 免费实例的文件系统不适合长期持久化。当前 SQLite 方案适合 Demo；如果要长期保存历史会话和仪表盘，建议后续迁移到 PostgreSQL 或配置持久磁盘。
+
 ### 测试
 
 ```powershell
@@ -434,6 +481,53 @@ DEEPSEEK_MODEL=deepseek-v4-flash
 ```
 
 Without DeepSeek credentials, the system continues to work in offline rule-based demo mode.
+
+### Vercel + Render Deployment
+
+Recommended deployment shape:
+
+```text
+Vercel: hosts the frontend React app
+Render: hosts the FastAPI backend
+SQLite: temporarily kept in the Render backend runtime directory
+DeepSeek API key: stored only as a Render environment variable
+```
+
+Render backend settings:
+
+```text
+Root Directory: repository root
+Build Command: pip install -e "backend[test]"
+Start Command: python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+```
+
+Render environment variables:
+
+```env
+LLM_MODE=deepseek
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-flash
+CORS_ORIGINS=https://your-frontend.vercel.app,http://localhost:5173,http://127.0.0.1:5173
+```
+
+Vercel frontend settings:
+
+```text
+Root Directory: frontend
+Build Command: npm run build
+Output Directory: dist
+```
+
+Vercel environment variable:
+
+```env
+VITE_API_BASE_URL=https://your-backend.onrender.com
+```
+
+Local development does not require `VITE_API_BASE_URL`; the frontend still calls relative `/api/...` paths through the Vite proxy. In Vercel, API calls are automatically prefixed with the Render backend URL configured in `VITE_API_BASE_URL`.
+
+Note: the free Render filesystem is not designed for long-term persistence. SQLite is fine for a demo, but PostgreSQL or a persistent disk is recommended if conversation history and dashboards must survive restarts.
 
 ### Tests
 
