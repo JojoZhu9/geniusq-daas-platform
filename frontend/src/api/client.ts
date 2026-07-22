@@ -1,3 +1,5 @@
+import { staticDemoRequest } from "./staticDemo";
+
 export type ApiErrorPayload = {
   code: string;
   message: string;
@@ -15,6 +17,9 @@ export class ApiClientError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (import.meta.env.VITE_STATIC_DEMO === "1") {
+    return staticDemoRequest<T>(path, init);
+  }
   const response = await fetch(path, {
     ...init,
     headers: {
