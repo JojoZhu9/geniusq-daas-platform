@@ -238,6 +238,7 @@ DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-flash
 CORS_ORIGINS=https://your-frontend.vercel.app,http://localhost:5173,http://127.0.0.1:5173
+CORS_ORIGIN_REGEX=https://.*\\.vercel\\.app
 ```
 
 前端 Vercel 配置：
@@ -254,7 +255,9 @@ Vercel 环境变量示例：
 VITE_API_BASE_URL=https://your-backend.onrender.com
 ```
 
-本地开发不需要设置 `VITE_API_BASE_URL`，前端仍会请求相对路径 `/api/...`，由 Vite proxy 转发到本地 FastAPI。部署到 Vercel 后，前端会自动把 API 请求发送到 `VITE_API_BASE_URL` 指向的 Render 后端。
+本地开发不需要设置 `VITE_API_BASE_URL`，前端仍会请求相对路径 `/api/...`，由 Vite proxy 转发到本地 FastAPI。部署到 Vercel 后，前端会自动把 API 请求发送到 `VITE_API_BASE_URL` 指向的 Render 后端。`VITE_API_BASE_URL` 只填写 Render 根域名，不要追加 `/api`。
+
+前端项目包含 `frontend/vercel.json`，用于把 `/query`、`/dashboards` 等前端路由刷新时回退到 `index.html`，避免 Vercel 出现 `404: NOT_FOUND`。
 
 注意：Render 免费实例的文件系统不适合长期持久化。当前 SQLite 方案适合 Demo；如果要长期保存历史会话和仪表盘，建议后续迁移到 PostgreSQL 或配置持久磁盘。
 
@@ -509,6 +512,7 @@ DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-flash
 CORS_ORIGINS=https://your-frontend.vercel.app,http://localhost:5173,http://127.0.0.1:5173
+CORS_ORIGIN_REGEX=https://.*\\.vercel\\.app
 ```
 
 Vercel frontend settings:
@@ -525,7 +529,9 @@ Vercel environment variable:
 VITE_API_BASE_URL=https://your-backend.onrender.com
 ```
 
-Local development does not require `VITE_API_BASE_URL`; the frontend still calls relative `/api/...` paths through the Vite proxy. In Vercel, API calls are automatically prefixed with the Render backend URL configured in `VITE_API_BASE_URL`.
+Local development does not require `VITE_API_BASE_URL`; the frontend still calls relative `/api/...` paths through the Vite proxy. In Vercel, API calls are automatically prefixed with the Render backend URL configured in `VITE_API_BASE_URL`. `VITE_API_BASE_URL` should be the Render root domain only; do not append `/api`.
+
+The frontend includes `frontend/vercel.json`, which rewrites `/query`, `/dashboards`, and other SPA routes back to `index.html` on refresh, preventing Vercel `404: NOT_FOUND` errors.
 
 Note: the free Render filesystem is not designed for long-term persistence. SQLite is fine for a demo, but PostgreSQL or a persistent disk is recommended if conversation history and dashboards must survive restarts.
 

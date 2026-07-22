@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -64,6 +65,12 @@ def test_environment_example_keeps_offline_as_the_default_and_documents_cors():
         "CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173",
     ]:
         assert expected in environment
+
+
+def test_vercel_config_rewrites_spa_routes_to_index():
+    config = json.loads(read_text("frontend/vercel.json"))
+
+    assert config["rewrites"] == [{"source": "/(.*)", "destination": "/"}]
 
 
 def test_launcher_is_safe_for_windows_powershell_51_encoding():

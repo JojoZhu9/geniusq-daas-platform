@@ -26,6 +26,7 @@ app = FastAPI(title="GeniusQ DaaS Platform Intelligent Query Demo", lifespan=lif
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
+    allow_origin_regex=settings.cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,3 +47,8 @@ def api_error_handler(_: Request, error: ApiError) -> JSONResponse:
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "mode": get_settings().llm_mode}
+
+
+@app.get("/")
+def root() -> dict[str, str]:
+    return health()

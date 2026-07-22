@@ -46,7 +46,12 @@ def test_settings_default_to_offline_local_database():
     assert normalized_database_url.endswith("/backend/runtime/daas_demo.db")
     assert settings.llm_mode == "offline"
     assert settings.query_row_limit == 500
-    assert settings.cors_origin_list == ["http://localhost:5173", "http://127.0.0.1:5173"]
+    assert settings.cors_origin_list == [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://geniusq-daas-platform.vercel.app",
+    ]
+    assert settings.cors_origin_regex == r"https://.*\.vercel\.app"
 
 
 def test_settings_parse_cors_origins_from_comma_separated_env(monkeypatch):

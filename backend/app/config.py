@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     deepseek_base_url: str = DEFAULT_DEEPSEEK_BASE_URL
     deepseek_model: str = DEFAULT_DEEPSEEK_MODEL
     deepseek_timeout_seconds: int = 30
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,https://geniusq-daas-platform.vercel.app"
+    cors_origin_regex: str = r"https://.*\.vercel\.app"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property
