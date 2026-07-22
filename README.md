@@ -265,8 +265,8 @@ VITE_API_BASE_URL=https://your-backend.onrender.com
 
 ```powershell
 python -m pytest backend/tests -q
-npm --prefix frontend run test:run
-npm --prefix frontend run build
+npm.cmd --prefix frontend run test:run
+npm.cmd --prefix frontend run build
 ```
 
 当前测试覆盖重点：
@@ -287,6 +287,8 @@ The project does not depend on production data. Demo data is generated locally i
 #### 1. Intelligent Query Workspace
 
 After a user asks a natural-language question, the system displays an Agent-like execution flow: understanding the question, merging context, retrieving knowledge, selecting tables and fields, calling Text-to-SQL, validating SQL, executing the query, and producing chart suggestions. The result area includes read-only SQL, data lineage, charts, conclusions, and suggested follow-up questions.
+
+<a id="screenshots"></a>
 
 ![Intelligent query result](docs/assets/readme/query-result.png)
 
@@ -539,8 +541,8 @@ Note: the free Render filesystem is not designed for long-term persistence. SQLi
 
 ```powershell
 python -m pytest backend/tests -q
-npm --prefix frontend run test:run
-npm --prefix frontend run build
+npm.cmd --prefix frontend run test:run
+npm.cmd --prefix frontend run build
 ```
 
 Current test coverage focuses on:
